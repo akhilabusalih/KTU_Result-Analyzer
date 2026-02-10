@@ -2,10 +2,8 @@
 uploads/
 outputs/
 reports/
-logs/
-.idea/
 
-# Environment variables
+# Environment variables / secrets
 .env
 Api.env
 
@@ -15,3 +13,6 @@ __pycache__/
 
 # Streamlit cache
 .streamlit/
+
+# IDE files
+.idea/
