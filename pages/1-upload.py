@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import uuid
 import pandas as pd
-from db import save_csv_records_to_mongodb
+from db import save_structured_records_to_mongodb
 
 
 from core import (
@@ -192,13 +192,27 @@ if st.session_state.departments:
                     if not matrix_data:
                         continue
 
-                    df = pd.DataFrame(matrix_data)
+                    rows = []
+
+                    for student in matrix_data:
+
+                        row = {
+                            "Register No": student["reg_no"]
+                        }
+
+                        for subject, info in student["subjects"].items():
+                            row[subject] = info["grade"]
+
+                        rows.append(row)
+
+                    df = pd.DataFrame(rows)
+
                     output_file = dept.replace(" ", "_") + ".csv"
                     output_path = os.path.join(OUTPUT_DIR, output_file)
                     df.to_csv(output_path, index=False)
 
                     # Save to MongoDB
-                    save_csv_records_to_mongodb(df, dept)
+                    save_structured_records_to_mongodb(matrix_data, dept)
 
                     processed_files.append(output_file)
                     # Update session with latest processed department
@@ -215,13 +229,27 @@ if st.session_state.departments:
                 headers, matrix_data = create_matrix_data(raw_data)
 
                 if matrix_data:
-                    df = pd.DataFrame(matrix_data)
+                    rows = []
+
+                    for student in matrix_data:
+
+                        row = {
+                            "Register No": student["reg_no"]
+                        }
+
+                        for subject, info in student["subjects"].items():
+                            row[subject] = info["grade"]
+
+                        rows.append(row)
+
+                    df = pd.DataFrame(rows)
+
                     output_file = selected_option.replace(" ", "_") + ".csv"
                     output_path = os.path.join(OUTPUT_DIR, output_file)
                     df.to_csv(output_path, index=False)
 
                     # Save to MongoDB
-                    save_csv_records_to_mongodb(df, selected_option)
+                    save_structured_records_to_mongodb(matrix_data, selected_option)
 
                     processed_files.append(output_file)
                     # -------- STORE CURRENT SESSION DATA -------- #

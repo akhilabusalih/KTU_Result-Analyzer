@@ -50,42 +50,36 @@ logger = logging.getLogger(__name__)
 def get_db():
     client = MongoClient(MONGO_URI)
     return client[DB_NAME]
-
-# ---------------- SAVE TO MONGODB ---------------- #
-
-def save_csv_records_to_mongodb(df, department_name):
-    """
-       Saves a DataFrame into MongoDB as a collection.
-       Collection name = department name (normalized)
-    """
-    db = get_db()
-
-    collection_name = re.sub(
+def get_collection_name(department_name):
+    return re.sub(
         r"[^a-z0-9_]",
         "",
         department_name.lower().replace(" ", "_")
     )
 
+
+# ---------------- SAVE TO MONGODB ---------------- #
+
+def save_structured_records_to_mongodb(students, department_name):
+    """
+    Saves structured student records (nested subjects) into MongoDB.
+    """
+
+    db = get_db()
+
+    collection_name = get_collection_name(department_name)
+
     collection = db[collection_name]
 
-    clean_records = []
-
-    for record in df.to_dict("records"):
-        cleaned = {}
-
-        for key, value in record.items():
-            if key.lower() == "register no":
-                cleaned[key] = value
-            else:
-                cleaned[key] = convert_grade_to_points(value)
-
-        clean_records.append(cleaned)
-
+    # Clear old records
     collection.delete_many({})
-    collection.insert_many(clean_records)
+
+    # Insert structured documents directly
+    if students:
+        collection.insert_many(students)
 
     logger.info(
-        f"Inserted {len(clean_records)} records into MongoDB collection '{collection_name}'"
+        f"Inserted {len(students)} structured records into '{collection_name}'"
     )
 
-    return len(clean_records)
+    return len(students)

@@ -1,5 +1,9 @@
 import streamlit as st
-
+from db import get_db, get_collection_name
+import pandas as pd
+from cgpa import update_all_cgpa
+from config import CREDIT_COLLECTION
+import os
 
 # --------------------------------------------------
 # PAGE CONFIG
@@ -26,12 +30,82 @@ if "current_df" not in st.session_state or "current_department" not in st.sessio
 
 df = st.session_state["current_df"]
 department = st.session_state["current_department"]
+db = get_db()
+collection_name = get_collection_name(department)
+
+update_all_cgpa(
+    db,
+    collection_name,
+    CREDIT_COLLECTION
+)
+# ---------------------------------------
+# FETCH CGPA FROM DB AND ADD TO DF
+# ---------------------------------------
+
+collection = db[collection_name]
+
+cgpa_map = {
+    student["reg_no"]: student.get("CGPA", 0)
+    for student in collection.find({}, {"reg_no": 1, "CGPA": 1})
+}
+
+df["CGPA"] = df["Register No"].map(cgpa_map)
+
+# ---------------------------------------
+# UPDATE CSV FILE WITH CGPA COLUMN
+# ---------------------------------------
+
+output_file = department.replace(" ", "_") + ".csv"
+output_path = os.path.join("outputs", output_file)
+
+df.to_csv(output_path, index=False)
 
 # --------------------------------------------------
 # BASIC METRICS
 # --------------------------------------------------
 total_students = len(df)
-total_subjects = len(df.columns) - 1  # excluding Register No
+total_subjects = len([col for col in df.columns if col not in ["Register No", "CGPA"]]) # excluding Register No
+
+subjects = [col for col in df.columns if col not in ["Register No", "CGPA"]]
+
+#------------------PERFORMANCE ANALYSIS---------------------
+st.markdown("## 📘 Performance Analysis of All Students")
+
+analysis_rows = []
+
+for subject in subjects:
+
+    total = len(df)
+
+    pass_count = df[df[subject] != "F"].shape[0]
+    fail_count = df[df[subject] == "F"].shape[0]
+
+    pass_percent = round((pass_count / total) * 100, 2)
+
+    grade_counts = df[subject].value_counts().to_dict()
+
+    row = {
+        "Subject": subject,
+        "Pass %": pass_percent,
+        "Pass Count": pass_count,
+        "Fail Count": fail_count,
+        "S": grade_counts.get("S", 0),
+        "A+": grade_counts.get("A+", 0),
+        "A": grade_counts.get("A", 0),
+        "B+": grade_counts.get("B+", 0),
+        "B": grade_counts.get("B", 0),
+        "C+": grade_counts.get("C+", 0),
+        "C": grade_counts.get("C", 0),
+        "D": grade_counts.get("D", 0),
+        "P": grade_counts.get("P", 0),
+        "F": grade_counts.get("F", 0)
+    }
+
+    analysis_rows.append(row)
+
+analysis_df = pd.DataFrame(analysis_rows)
+st.dataframe(analysis_df, use_container_width=True)
+
 
 # --------------------------------------------------
 # DISPLAY HEADER
@@ -51,6 +125,49 @@ with col2:
 # --------------------------------------------------
 st.markdown("### 🔍 Student Result Preview")
 st.dataframe(df, use_container_width=True)
+
+# --------------------------------------------------
+# REGULAR STUDENTS FILTER
+# --------------------------------------------------
+
+regular_df = df[df["Register No"].str.contains("19")]
+
+st.markdown("## 📗 Performance Analysis of  Students (2019)")
+
+total_regular = len(regular_df)
+
+failed_students = regular_df[
+    (regular_df[subjects] == "F").any(axis=1)
+]
+
+total_failed = len(failed_students)
+total_passed = total_regular - total_failed
+
+pass_percent_regular = round((total_passed / total_regular) * 100, 2)
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Total Regular Students", total_regular)
+col2.metric("Total Failed (≥1 F)", total_failed)
+col3.metric("Pass % (Regular)", f"{pass_percent_regular}%")
+
+# --------------------------------------------------
+# TOPPERS
+# --------------------------------------------------
+
+
+db = get_db()
+
+collection = db[collection_name]
+
+top_students  = list(
+    collection.find().sort("CGPA", -1).limit(3)
+)
+
+st.markdown("## 🏆 Toppers ")
+
+for student in top_students:
+    st.write(f"{student['reg_no']} — CGPA: {student.get('CGPA', 0)}")
 
 # --------------------------------------------------
 # DATA LOSS WARNING

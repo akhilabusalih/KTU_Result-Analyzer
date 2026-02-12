@@ -3,6 +3,7 @@ import re
 import logging
 import os
 from datetime import datetime
+from config import GRADE_TO_POINT, GRADE_STATUS
 
 # ---------------- LOGGING SETUP ---------------- #
 
@@ -49,6 +50,8 @@ IGNORE_KEYWORDS = [
     "The following table",
     "Page"
 ]
+
+
 
 
 # ---------------- HELPERS ---------------- #
@@ -158,26 +161,37 @@ def extract_raw_lines_for_dept(pdf_path: str, target_dept_name: str):
 # ---------------- PASS 3 ---------------- #
 
 def create_matrix_data(raw_data):
-    logger.info("Creating matrix data")
+    logger.info("Creating structured student data")
 
     parsed_students = []
     all_subjects = set()
 
     for reg_no, text_blob in raw_data:
-        record = {"Register No": reg_no}
+
+        student = {
+            "reg_no": reg_no,
+            "subjects": {}
+        }
+
         matches = GRADE_PATTERN.findall(text_blob)
 
         for subject, grade in matches:
-            if subject not in record:
-                record[subject] = grade
-                all_subjects.add(subject)
 
-        parsed_students.append(record)
+            grade = grade.strip()
+
+            student["subjects"][subject] = {
+                "grade": grade,
+                "grade_point": GRADE_TO_POINT.get(grade, 0),
+                "status": GRADE_STATUS.get(grade, "UNKNOWN")
+            }
+
+            all_subjects.add(subject)
+
+        parsed_students.append(student)
 
     logger.info(
-        f"Matrix created with {len(parsed_students)} students "
-        f"and {len(all_subjects)} subjects"
+        f"Structured data created for {len(parsed_students)} students "
+        f"with {len(all_subjects)} subjects"
     )
 
-    headers = ["Register No"] + sorted(all_subjects)
-    return headers, parsed_students
+    return sorted(all_subjects), parsed_students
