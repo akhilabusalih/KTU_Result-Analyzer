@@ -122,42 +122,9 @@ if uploaded_file:
 
     st.session_state.pdf_path = pdf_path
 
-    st.markdown("### 🔄 What happens after upload?")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.markdown("""
-        <div class="step-card">
-            <div class="step-title">📑 PDF Parsing</div>
-            <div class="step-text">
-                The system scans the PDF and automatically detects departments.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c2:
-        st.markdown("""
-        <div class="step-card">
-            <div class="step-title">🗂 CSV Generation</div>
-            <div class="step-text">
-                Department-wise CSV files are generated and stored securely.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c3:
-        st.markdown("""
-        <div class="step-card">
-            <div class="step-title">📊 Analysis & AI</div>
-            <div class="step-text">
-                View results, analyze performance, or ask questions using the AI assistant.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
 
     # -------- PARSE IMMEDIATELY TO FIND DEPARTMENTS -------- #
-    with st.status("Scanning departments in PDF...", expanded=False):
+    with st.status("🔄 Scanning departments in PDF...", expanded=True):
         departments = get_available_departments(pdf_path)
 
     if not departments:
@@ -174,9 +141,10 @@ if st.session_state.departments:
         "Select Department to Process",
         options
     )
+    st.divider()
 
     if st.button("Process Result"):
-        with st.status("Processing result data...", expanded=False):
+        with st.status("🔄 Processing Result...", expanded=True):
 
             processed_files = []
 

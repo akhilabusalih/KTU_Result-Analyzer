@@ -4,6 +4,9 @@ import pandas as pd
 from cgpa import update_all_cgpa
 from config import CREDIT_COLLECTION
 import os
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 # --------------------------------------------------
 # PAGE CONFIG
@@ -106,6 +109,74 @@ for subject in subjects:
 analysis_df = pd.DataFrame(analysis_rows)
 st.dataframe(analysis_df, use_container_width=True)
 
+# --------------------------------------------------
+# PASS vs FAIL CHART (COMPACT)
+# --------------------------------------------------
+
+st.markdown("### 📊 Pass vs Fail Comparison")
+
+subjects_chart = analysis_df["Subject"]
+pass_counts = analysis_df["Pass Count"]
+fail_counts = analysis_df["Fail Count"]
+
+fig = plt.figure(figsize=(10, 4))  # compact height
+
+x = np.arange(len(subjects_chart))
+width = 0.35
+
+plt.bar(x - width/2, pass_counts, width)
+plt.bar(x + width/2, fail_counts, width)
+
+plt.xticks(x, subjects_chart, rotation=45, fontsize=8)
+plt.yticks(fontsize=8)
+plt.xlabel("Subject", fontsize=9)
+plt.ylabel("Count", fontsize=9)
+plt.title("Pass vs Fail Count per Subject", fontsize=10)
+
+plt.legend(["Pass", "Fail"], fontsize=8, loc="upper right")
+
+plt.tight_layout()
+
+st.pyplot(fig)
+
+# --------------------------------------------------
+# GRADE DISTRIBUTION CHART (COMPACT)
+# --------------------------------------------------
+
+st.markdown("### 🎯 Grade Distribution")
+
+grade_columns = ["S", "A+", "A", "B+", "B", "C+", "C", "D", "P", "F"]
+
+subjects_chart = analysis_df["Subject"]
+
+fig2 = plt.figure(figsize=(10, 4))  # smaller height
+
+bottom_values = np.zeros(len(subjects_chart))
+
+for grade in grade_columns:
+    values = analysis_df[grade]
+    plt.bar(subjects_chart, values, bottom=bottom_values)
+    bottom_values += values
+
+plt.xticks(rotation=45, fontsize=8)
+plt.yticks(fontsize=8)
+plt.xlabel("Subject", fontsize=9)
+plt.ylabel("Count", fontsize=9)
+plt.title("Grade Distribution per Subject", fontsize=10)
+
+# Smaller legend, placed below
+plt.legend(
+    grade_columns,
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.25),
+    ncol=5,
+    fontsize=7
+)
+
+plt.tight_layout()
+
+st.pyplot(fig2)
+
 
 # --------------------------------------------------
 # DISPLAY HEADER
@@ -168,6 +239,97 @@ st.markdown("## 🏆 Toppers ")
 
 for student in top_students:
     st.write(f"{student['reg_no']} — CGPA: {student.get('CGPA', 0)}")
+
+
+# --------------------------------------------------
+# EXPORT OPTIONS
+# --------------------------------------------------
+
+st.markdown("## 📤 Export Report")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("Export as Excel (.xlsx)"):
+
+        from report_generator import generate_excel_report
+
+        file_path = generate_excel_report(
+            department,
+            df,
+            analysis_df,
+            total_students
+        )
+
+        with open(file_path, "rb") as f:
+            st.download_button(
+                label="Download Excel",
+                data=f,
+                file_name=f"{department}_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+with col2:
+    if st.button("Export as PDF (.pdf)"):
+
+        from report_generator import generate_pdf_report
+
+        file_path = generate_pdf_report(
+            department,
+            df,
+            analysis_df,
+            total_students
+        )
+
+        with open(file_path, "rb") as f:
+            st.download_button(
+                label="Download PDF",
+                data=f,
+                file_name=f"{department}_Report.pdf",
+                mime="application/pdf"
+            )
+
+
+# --------------------------------------------------
+# HANDLE EXPORT ACTION
+# --------------------------------------------------
+
+from report_generator import generate_excel_report, generate_pdf_report
+
+if "export_type" in st.session_state:
+
+    if st.session_state["export_type"] == "excel":
+        file_path = generate_excel_report(
+            department,
+            df,
+            analysis_df,
+            total_students
+        )
+        st.success("Excel report generated!")
+        with open(file_path, "rb") as f:
+            st.download_button(
+                label="Download Excel",
+                data=f,
+                file_name=f"{department}_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+
+    elif st.session_state["export_type"] == "pdf":
+        file_path = generate_pdf_report(
+            department,
+            df,
+            analysis_df,
+            total_students
+        )
+        st.success("PDF report generated!")
+        with open(file_path, "rb") as f:
+            st.download_button(
+                label="Download PDF",
+                data=f,
+                file_name=f"{department}_Report.pdf",
+                mime="application/pdf"
+            )
 
 # --------------------------------------------------
 # DATA LOSS WARNING
