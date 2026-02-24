@@ -41,12 +41,12 @@ st.markdown("""
 
     .hero-subtitle {
         font-size: 1.2rem;
-        color: #b0b0b0;
         margin-bottom: 3rem;
+        opacity: 0.8;
     }
 
     .feature-card {
-        background-color: #161b22;
+        background-color: rgba(255,255,255,0.03);
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 16px;
         padding: 25px;
@@ -60,15 +60,15 @@ st.markdown("""
     }
 
     .feature-text {
-        color: #c9d1d9;
         font-size: 0.95rem;
         line-height: 1.5;
+        opacity: 0.85;
     }
 
     .hint {
         margin-top: 3rem;
-        color: #9da5b4;
         font-size: 0.95rem;
+        opacity: 0.75;
     }
 </style>
 """, unsafe_allow_html=True)

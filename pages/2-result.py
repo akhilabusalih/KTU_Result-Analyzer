@@ -1,5 +1,5 @@
 import streamlit as st
-from db import get_db, get_collection_name
+from db import get_db
 import pandas as pd
 from cgpa import update_all_cgpa
 from config import CREDIT_COLLECTION
@@ -34,22 +34,26 @@ if "current_df" not in st.session_state or "current_department" not in st.sessio
 df = st.session_state["current_df"]
 department = st.session_state["current_department"]
 db = get_db()
-collection_name = get_collection_name(department)
+collection_name = "Result"
 
 update_all_cgpa(
     db,
     collection_name,
-    CREDIT_COLLECTION
+    CREDIT_COLLECTION,
+    department
 )
 # ---------------------------------------
 # FETCH CGPA FROM DB AND ADD TO DF
 # ---------------------------------------
 
-collection = db[collection_name]
+collection = db["Result"]
 
 cgpa_map = {
     student["reg_no"]: student.get("CGPA", 0)
-    for student in collection.find({}, {"reg_no": 1, "CGPA": 1})
+    for student in collection.find(
+        {"department": department},
+        {"reg_no": 1, "CGPA": 1}
+    )
 }
 
 df["CGPA"] = df["Register No"].map(cgpa_map)
@@ -203,7 +207,7 @@ st.dataframe(df, use_container_width=True)
 
 regular_df = df[df["Register No"].str.contains("19")]
 
-st.markdown("## 📗 Performance Analysis of  Students (2019)")
+st.markdown("## 📗 Performance Analysis of  Students ")
 
 total_regular = len(regular_df)
 
@@ -228,11 +232,12 @@ col3.metric("Pass % (Regular)", f"{pass_percent_regular}%")
 
 
 db = get_db()
+collection = db["Result"]
 
-collection = db[collection_name]
-
-top_students  = list(
-    collection.find().sort("CGPA", -1).limit(3)
+top_students = list(
+    collection.find({"department": department})
+    .sort("CGPA", -1)
+    .limit(3)
 )
 
 st.markdown("## 🏆 Toppers ")

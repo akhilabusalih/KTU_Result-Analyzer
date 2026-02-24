@@ -29,15 +29,27 @@ def calculate_student_cgpa(student, credit_dict):
     return round(total_points / total_credits, 2)
 
 
-def update_all_cgpa(db, student_collection_name, credit_collection_name):
+def update_all_cgpa(
+    db,
+    student_collection_name,
+    credit_collection_name,
+    department=None
+):
 
     student_collection = db[student_collection_name]
     credit_dict = load_credit_dict(db, credit_collection_name)
 
-    for student in student_collection.find():
+    # Filter by department if provided
+    query = {}
+    if department:
+        query["department"] = department
+
+    for student in student_collection.find(query):
         cgpa = calculate_student_cgpa(student, credit_dict)
 
         student_collection.update_one(
             {"_id": student["_id"]},
             {"$set": {"CGPA": cgpa}}
         )
+
+

@@ -2,6 +2,7 @@ from pymongo import MongoClient
 import logging
 import os
 import re
+from datetime import datetime, UTC
 
 # ---------------- GRADE POINT MAP ---------------- #
 
@@ -60,26 +61,35 @@ def get_collection_name(department_name):
 
 # ---------------- SAVE TO MONGODB ---------------- #
 
-def save_structured_records_to_mongodb(students, department_name):
+def save_structured_records_to_mongodb(
+    students,
+    department_name,
+    semester=None,
+    upload_id=None
+):
     """
-    Saves structured student records (nested subjects) into MongoDB.
+    Saves structured student records into unified 'Result' collection.
     """
 
     db = get_db()
+    collection = db["Result"]
 
-    collection_name = get_collection_name(department_name)
+    enriched_students = []
 
-    collection = db[collection_name]
+    for student in students:
 
-    # Clear old records
-    collection.delete_many({})
+        student["department"] = department_name
+        student["semester"] = semester
+        student["upload_id"] = upload_id
+        student["created_at"] = datetime.now(UTC)
 
-    # Insert structured documents directly
-    if students:
-        collection.insert_many(students)
+        enriched_students.append(student)
+
+    if enriched_students:
+        collection.insert_many(enriched_students)
 
     logger.info(
-        f"Inserted {len(students)} structured records into '{collection_name}'"
+        f"Inserted {len(enriched_students)} records into 'Result'"
     )
 
-    return len(students)
+    return len(enriched_students)

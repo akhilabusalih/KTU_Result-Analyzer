@@ -4,7 +4,8 @@ import logging
 import os
 from datetime import datetime
 from config import GRADE_TO_POINT, GRADE_STATUS
-
+import pandas as pd
+from PyPDF2 import PdfReader
 # ---------------- LOGGING SETUP ---------------- #
 
 LOG_DIR = "logs"
@@ -58,6 +59,25 @@ IGNORE_KEYWORDS = [
 
 def clean_text(text: str) -> str:
     return " ".join(text.split())
+
+
+#-------------------SEMESTER IDENTIFIER-------------------------
+def extract_semester_from_pdf(file_path):
+    """
+    Extract semester number from first page of PDF.
+    Looks for patterns like S1, S2, S3, etc.
+    """
+
+    reader = PdfReader(file_path)
+    first_page_text = reader.pages[0].extract_text()
+
+    # Look for S1, S2 ... S8
+    match = re.search(r'\bS([1-8])\b', first_page_text)
+
+    if match:
+        return int(match.group(1))
+
+    return None
 
 
 # ---------------- PASS 1 ---------------- #
@@ -195,3 +215,105 @@ def create_matrix_data(raw_data):
     )
 
     return sorted(all_subjects), parsed_students
+
+# ---------------- STRUCTURED FILE SUPPORT ---------------- #
+
+def load_structured_file_with_detection(file_path):
+    """
+    Loads CSV or Excel file and automatically detects
+    the header row containing 'Register'.
+    """
+
+    if file_path.endswith(".csv"):
+        raw_df = pd.read_csv(file_path, header=None)
+    else:
+        raw_df = pd.read_excel(file_path, header=None)
+
+    header_row_index = None
+
+    for i in range(len(raw_df)):
+        row_values = raw_df.iloc[i].astype(str).str.upper().tolist()
+
+        if any("REGISTER" in cell for cell in row_values):
+            header_row_index = i
+            break
+
+    if header_row_index is None:
+        raise ValueError(
+            "Could not detect header row containing 'Register'"
+        )
+
+    if file_path.endswith(".csv"):
+        df = pd.read_csv(file_path, header=header_row_index)
+    else:
+        df = pd.read_excel(file_path, header=header_row_index)
+
+    return df
+
+def parse_result_file(file_path, department_name=None):
+    """
+    Smart parser:
+    - PDF → existing PDF logic
+    - CSV/XLSX → structured parser
+    Always returns:
+        headers, matrix_data
+    """
+
+    extension = file_path.split(".")[-1].lower()
+
+    # ---------------- PDF ---------------- #
+    if extension == "pdf":
+
+        # 🔥 Extract semester automatically
+        semester = extract_semester_from_pdf(file_path)
+
+        raw_data = extract_raw_lines_for_dept(
+            file_path,
+            department_name
+        )
+
+        headers, students = create_matrix_data(raw_data)
+
+        return headers, students, semester
+    # ---------------- CSV / EXCEL ---------------- #
+    elif extension in ["csv", "xlsx", "xls"]:
+
+        df = load_structured_file_with_detection(file_path)
+
+        if "Register No" not in df.columns:
+            raise ValueError(
+                "File must contain 'Register No' column."
+            )
+
+        students = []
+        subjects = [
+            col for col in df.columns
+            if col != "Register No"
+        ]
+
+        for _, row in df.iterrows():
+
+            student = {
+                "reg_no": row["Register No"],
+                "subjects": {}
+            }
+
+            for subject in subjects:
+
+                grade = str(row[subject]).strip().upper()
+
+                student["subjects"][subject] = {
+                    "grade": grade,
+                    "grade_point": GRADE_TO_POINT.get(grade, 0),
+                    "status": GRADE_STATUS.get(grade, "UNKNOWN")
+                }
+
+            students.append(student)
+
+        return subjects, students
+
+    else:
+        raise ValueError("Unsupported file format")
+
+def get_current_log_filename():
+    return log_filename
