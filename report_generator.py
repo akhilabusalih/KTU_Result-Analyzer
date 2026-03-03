@@ -29,7 +29,7 @@ def generate_excel_report(department, df, analysis_df, total_students):
     ws["B4"] = total_students
 
     ws["A5"] = "Total Subjects:"
-    ws["B5"] = len([col for col in df.columns if col not in ["Register No", "CGPA"]])
+    ws["B5"] = len([col for col in df.columns if col not in ["Register No", "SGPA"]])
 
     # ---------------- ANALYSIS TABLE ----------------
 
@@ -98,7 +98,7 @@ def generate_pdf_report(department, df, analysis_df, total_students):
     elements.append(Paragraph(f"Total Students: {total_students}", styles["Normal"]))
     elements.append(
         Paragraph(
-            f"Total Subjects: {len([col for col in df.columns if col not in ['Register No', 'CGPA']])}",
+            f"Total Subjects: {len([col for col in df.columns if col not in ["Register No", "SGPA"]])}",
             styles["Normal"]
         )
     )
@@ -110,11 +110,11 @@ def generate_pdf_report(department, df, analysis_df, total_students):
     elements.append(Spacer(1, 12))
 
     # Get toppers directly from df
-    top_students = df.sort_values(by="CGPA", ascending=False).head(3)
+    top_students = df.sort_values(by="SGPA", ascending=False).head(3)
 
     for _, row in top_students.iterrows():
         elements.append(
-            Paragraph(f"{row['Register No']} — CGPA: {row['CGPA']}", styles["Normal"])
+            Paragraph(f"{row['Register No']} — SGPA: {row['SGPA']}", styles["Normal"])
         )
 
     elements.append(Spacer(1, 20))

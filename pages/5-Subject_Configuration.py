@@ -38,7 +38,7 @@ with col3:
 with col4:
     with col4:
         st.error(
-            f"### 📆 {total_years} ({', '.join(map(str, year_list))})\nAcademic Years"
+            f"### 📆 {total_years} \nAcademic Years"
         )
 
 

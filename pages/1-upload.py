@@ -1,14 +1,40 @@
 import streamlit as st
 import os
 import uuid
-import pandas as pd
-from db import save_structured_records_to_mongodb, get_db
-from core import parse_result_file, get_available_departments
 from datetime import datetime, UTC
-from core import get_current_log_filename
+
+from utils.db import save_structured_records_to_mongodb, get_db
+from core import process_result_file
+from utils.batch import extract_batch_from_reg_no
+from utils.parser import extract_text_from_pdf, detect_departments
 
 
-# ---------------- PAGE CONFIG ---------------- #
+# --------------------------------------------------
+# DUPLICATE DATASET DIALOG
+# --------------------------------------------------
+
+@st.dialog("⚠ Dataset Already Exists")
+def confirm_overwrite(existing_data):
+    st.warning(
+        f"Data for {existing_data['department']} | "
+        f"S{existing_data['semester']} | "
+        f"{existing_data['batch']} already exists."
+    )
+
+    col1, col2 = st.columns(2)
+
+    if col1.button("Cancel"):
+        st.session_state.overwrite = False
+        st.rerun()
+
+    if col2.button("Overwrite"):
+        st.session_state.overwrite = True
+        st.rerun()
+
+
+# --------------------------------------------------
+# PAGE CONFIG
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="Upload Result PDF",
@@ -20,92 +46,48 @@ st.set_page_config(
 st.markdown("## 📄 Upload University Result PDF")
 st.caption("Upload the official university result PDF to start processing")
 
-#---------------------WARNING-------------------------#
-
 st.warning(
     "⚠️ Uploaded PDFs and generated results are temporary.\n\n"
-    "Your data will be **permanently deleted** if you:\n"
+    "Your data will be permanently deleted if you:\n"
     "- Reload the page\n"
     "- Upload a new PDF\n"
     "- Close the browser window"
 )
 
 
-#---------------UI STYLING----------------------------#
-
-st.markdown("""
-<style>
-    .block-container {
-        padding-top: 2.5rem;
-        padding-bottom: 2.5rem;
-        max-width: 900px;
-    }
-
-    .hint {
-        color: #9da5b4;
-        font-size: 0.95rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .step-card {
-        background-color: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 14px;
-        padding: 18px;
-        height: 100%;
-    }
-
-    .step-title {
-        font-weight: 600;
-        margin-bottom: 6px;
-    }
-
-    .step-text {
-        color: #c9d1d9;
-        font-size: 0.9rem;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
-# ---------------- PATHS ---------------- #
+# --------------------------------------------------
+# PATHS
+# --------------------------------------------------
 
 UPLOAD_DIR = "uploads"
-OUTPUT_DIR = "outputs"
-
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ---------------- SESSION STATE ---------------- #
+
+# --------------------------------------------------
+# SESSION STATE INIT
+# --------------------------------------------------
 
 st.session_state.setdefault("pdf_path", None)
-st.session_state.setdefault("departments", [])
+st.session_state.setdefault("available_departments", [])
+st.session_state.setdefault("start_processing", False)
 
-# ---------------- FILE UPLOAD ---------------- #
 
-st.markdown(
-    "<div class='hint'>Only official university result PDFs are supported.</div>",
-    unsafe_allow_html=True
-)
+# --------------------------------------------------
+# FILE UPLOAD
+# --------------------------------------------------
 
 uploaded_file = st.file_uploader(
     "Upload Result PDF",
-    type=["pdf", "csv", "xlsx"],
+    type=["pdf"],
     help="Upload only official university-issued result PDFs"
 )
 
-
 if uploaded_file:
+    st.session_state["uploaded_filename"] = uploaded_file.name
 
-    # 🔥 New upload = new session → clean old files
-    for folder in ["uploads", "outputs"]:
-        if os.path.exists(folder):
-            for file in os.listdir(folder):
-                os.remove(os.path.join(folder, file))
-
-    # 🔥 Clear previous result data (NEW SESSION)
-    st.session_state.pop("current_df", None)
-    st.session_state.pop("current_department", None)
+    # Clear previous uploads
+    for file in os.listdir(UPLOAD_DIR):
+        os.remove(os.path.join(UPLOAD_DIR, file))
 
     file_id = uuid.uuid4().hex
     pdf_name = f"{file_id}_{uploaded_file.name}"
@@ -118,113 +100,114 @@ if uploaded_file:
 
     st.session_state.pdf_path = pdf_path
 
-    file_extension = uploaded_file.name.split(".")[-1].lower()
-    st.session_state.file_type = file_extension
+    full_text = extract_text_from_pdf(pdf_path)
+    departments = detect_departments(full_text)
 
-    if file_extension == "pdf":
-        st.caption("Departments will be detected automatically. Choose what to process below.")
-    else:
-        st.caption("Structured file detected. Ready to process.")
+    st.session_state.available_departments = departments
 
 
+# --------------------------------------------------
+# DEPARTMENT SELECTION
+# --------------------------------------------------
 
+if st.session_state.get("pdf_path"):
 
-    # -------- PARSE IMMEDIATELY TO FIND DEPARTMENTS -------- #
-    file_extension = st.session_state.file_type
-
-    if file_extension == "pdf":
-        with st.status("🔄 Scanning departments in PDF...", expanded=False):
-            departments = get_available_departments(pdf_path)
-
-        if not departments:
-            st.error("No departments found in the uploaded PDF")
-        else:
-            st.session_state.departments = departments
-    else:
-        st.session_state.departments = ["STRUCTURED FILE"]
-
-# ---------------- DEPARTMENT DROPDOWN ---------------- #
-
-if st.session_state.departments:
-    options = st.session_state.departments  # no need for ALL DEPARTMENTS now
-
-    selected_option = st.selectbox(
-        "Select Department to Process",
-        options
+    st.session_state.department_name = st.selectbox(
+        "Select Department",
+        st.session_state.available_departments
     )
 
-    st.divider()
-
     if st.button("Process Result"):
-
-        with st.status("🔄 Processing Result...", expanded=False):
-
-            file_extension = st.session_state.get("file_type")
-            pdf_path = st.session_state.get("pdf_path")
-
-            if file_extension == "pdf":
-                department_name = selected_option
-                headers, matrix_data, semester = parse_result_file(
-                    pdf_path,
-                    department_name
-                )
-            else:
-                department_name = "STRUCTURED FILE"
-                headers, matrix_data, semester = parse_result_file(pdf_path)
-
-            if not matrix_data:
-                st.error("No valid student data found.")
-                st.stop()
-
-            rows = []
-
-            for student in matrix_data:
-                row = {
-                    "Register No": student["reg_no"]
-                }
-
-                for subject, info in student["subjects"].items():
-                    row[subject] = info["grade"]
-
-                rows.append(row)
-
-            df = pd.DataFrame(rows)
-
-            output_file = department_name.replace(" ", "_") + ".csv"
-            output_path = os.path.join(OUTPUT_DIR, output_file)
-            df.to_csv(output_path, index=False)
-
-            upload_id = f"{department_name}_S{semester}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-            save_structured_records_to_mongodb(
-                matrix_data,
-                department_name,
-                semester=semester,
-                upload_id=upload_id
-            )
-            # Save upload metadata
-            db = get_db()
-
-            db["Uploads_Metadata"].insert_one({
-                "upload_id": upload_id,
-                "department": department_name,
-                "semester": semester,
-                "uploaded_at": datetime.now(UTC),
-                "total_students": len(matrix_data),
-                "file_name": uploaded_file.name,
-                "log_file": get_current_log_filename()
-            })
-
-            st.session_state["current_department"] = department_name
-            st.session_state["current_df"] = df
-
-        st.success("✅ Processing completed successfully")
-        st.caption("Redirecting to Result Analysis page...")
-
-        import time
-        time.sleep(1)
-
-        st.switch_page("pages/2-result.py")
+        st.session_state.start_processing = True
 
 
+# --------------------------------------------------
+# MAIN PROCESSING LOGIC
+# --------------------------------------------------
 
+if st.session_state.get("start_processing"):
+
+    db = get_db()
+
+    # ---------------- PARSE PDF ---------------- #
+
+    headers, processed_students, semester = process_result_file(
+        st.session_state.pdf_path,
+        st.session_state.department_name,
+        db
+    )
+
+    if not processed_students:
+        st.error("No valid student data found.")
+        st.session_state.start_processing = False
+        st.stop()
+
+    # ---------------- BATCH EXTRACTION ---------------- #
+
+    first_reg_no = processed_students[0]["reg_no"]
+    admission_year, batch = extract_batch_from_reg_no(first_reg_no)
+
+    # ---------------- DUPLICATE CHECK ---------------- #
+
+    existing = db["Uploads_Metadata"].find_one({
+        "department": st.session_state.department_name,
+        "semester": semester,
+        "batch": batch
+    })
+
+    if existing and "overwrite" not in st.session_state:
+        st.session_state.existing_data = existing
+        confirm_overwrite(existing)
+        st.stop()
+
+    if "overwrite" in st.session_state:
+
+        if st.session_state.overwrite:
+            old_upload_id = st.session_state.existing_data["upload_id"]
+
+            db["Uploads_Metadata"].delete_one({"upload_id": old_upload_id})
+            db["Result"].delete_many({"upload_id": old_upload_id})
+        else:
+            # Cancel processing
+            st.session_state.start_processing = False
+            del st.session_state.overwrite
+            del st.session_state.existing_data
+            st.stop()
+
+        del st.session_state.overwrite
+        del st.session_state.existing_data
+
+    # ---------------- SAVE DATA ---------------- #
+
+    upload_id = f"{st.session_state.department_name}_S{semester}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    with st.status("🔄 Processing Result...", expanded=True):
+
+        save_structured_records_to_mongodb(
+            processed_students,
+            st.session_state.department_name,
+            semester=semester,
+            upload_id=upload_id,
+            admission_year=admission_year,
+            batch=batch
+        )
+
+        db["Uploads_Metadata"].insert_one({
+            "upload_id": upload_id,
+            "department": st.session_state.department_name,
+            "semester": semester,
+            "admission_year": admission_year,
+            "batch": batch,
+            "uploaded_at": datetime.now(UTC),
+            "total_students": len(processed_students),
+            "file_name": st.session_state.get("uploaded_filename")
+        })
+
+    # Reset processing flag
+    st.session_state.start_processing = False
+
+    st.success("✅ Processing completed successfully")
+
+    st.session_state["last_upload_id"] = upload_id
+
+    st.switch_page("pages/2-result.py")

@@ -1,11 +1,9 @@
 import streamlit as st
-from db import get_db
-import pandas as pd
-from cgpa import update_all_cgpa
-from config import CREDIT_COLLECTION
+from utils.db import get_db
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 
 # --------------------------------------------------
@@ -26,40 +24,57 @@ st.markdown("## 📊 Result Analysis")
 # --------------------------------------------------
 # SESSION VALIDATION
 # --------------------------------------------------
-if "current_df" not in st.session_state or "current_department" not in st.session_state:
+
+
+if "last_upload_id" not in st.session_state:
     st.warning("No result data available.")
     st.info("Please upload and process a result PDF first.")
     st.stop()
 
-df = st.session_state["current_df"]
-department = st.session_state["current_department"]
+upload_id = st.session_state["last_upload_id"]
+
 db = get_db()
-collection_name = "Result"
 
-update_all_cgpa(
-    db,
-    collection_name,
-    CREDIT_COLLECTION,
-    department
-)
-# ---------------------------------------
-# FETCH CGPA FROM DB AND ADD TO DF
-# ---------------------------------------
+students = list(db["Result"].find({"upload_id": upload_id}))
 
-collection = db["Result"]
+if not students:
+    st.warning("No result data found for this upload.")
+    st.stop()
 
-cgpa_map = {
-    student["reg_no"]: student.get("CGPA", 0)
-    for student in collection.find(
-        {"department": department},
-        {"reg_no": 1, "CGPA": 1}
-    )
-}
 
-df["CGPA"] = df["Register No"].map(cgpa_map)
+df = pd.DataFrame(students)
+
+department = students[0]["department_name"]
 
 # ---------------------------------------
-# UPDATE CSV FILE WITH CGPA COLUMN
+# FETCH SGPA FROM DB AND ADD TO DF
+# ---------------------------------------
+
+students = list(db["Result"].find({"upload_id": upload_id}))
+rows = []
+
+for student in students:
+    row = {
+        "Register No": student["reg_no"]
+    }
+
+    for subject in student.get("subjects", []):
+        row[subject["subject_code"]] = subject["grade"]
+
+    row["SGPA"] = student.get("SGPA")
+
+    rows.append(row)
+
+import pandas as pd
+df = pd.DataFrame(rows)
+
+# Move SGPA to last column
+if "SGPA" in df.columns:
+    cols = [c for c in df.columns if c != "SGPA"] + ["SGPA"]
+    df = df[cols]
+
+# ---------------------------------------
+# UPDATE CSV FILE WITH SGPA COLUMN
 # ---------------------------------------
 
 output_file = department.replace(" ", "_") + ".csv"
@@ -71,9 +86,9 @@ df.to_csv(output_path, index=False)
 # BASIC METRICS
 # --------------------------------------------------
 total_students = len(df)
-total_subjects = len([col for col in df.columns if col not in ["Register No", "CGPA"]]) # excluding Register No
+total_subjects = len([col for col in df.columns if col not in ["Register No", "SGPA"]]) # excluding Register No
 
-subjects = [col for col in df.columns if col not in ["Register No", "CGPA"]]
+subjects = [col for col in df.columns if col not in ["Register No", "SGPA"]]
 
 #------------------PERFORMANCE ANALYSIS---------------------
 st.markdown("## 📘 Performance Analysis of All Students")
@@ -205,7 +220,7 @@ st.dataframe(df, use_container_width=True)
 # REGULAR STUDENTS FILTER
 # --------------------------------------------------
 
-regular_df = df[df["Register No"].str.contains("19")]
+regular_df = df
 
 st.markdown("## 📗 Performance Analysis of  Students ")
 
@@ -235,15 +250,15 @@ db = get_db()
 collection = db["Result"]
 
 top_students = list(
-    collection.find({"department": department})
-    .sort("CGPA", -1)
+collection.find({"upload_id": upload_id})
+    .sort("SGPA", -1)
     .limit(3)
 )
 
 st.markdown("## 🏆 Toppers ")
 
 for student in top_students:
-    st.write(f"{student['reg_no']} — CGPA: {student.get('CGPA', 0)}")
+    st.write(f"{student['reg_no']} — SGPA: {student.get('SGPA', 0)}")
 
 
 # --------------------------------------------------

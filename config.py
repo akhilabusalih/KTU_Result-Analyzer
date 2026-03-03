@@ -1,21 +1,35 @@
-MONGO_URI = "mongodb://localhost:27017/"
-DATABASE_NAME = "result_analyzer"
-CREDIT_COLLECTION = "Subject_Grade"
+from dotenv import load_dotenv
+import os
+
+load_dotenv("Api.env")
+
+MONGO_URI = os.getenv("MONGO_URI")
+DATABASE_NAME = os.getenv("DATABASE_NAME")
+CREDIT_COLLECTION = os.getenv("CREDIT_COLLECTION")
+
+if not MONGO_URI:
+    raise ValueError("MONGO_URI not set in environment.")
+
+if not DATABASE_NAME:
+    raise ValueError("DATABASE_NAME not set in environment.")
+
+print("Loaded MONGO_URI:", os.getenv("MONGO_URI"))
 
 GRADE_TO_POINT = {
-    "S": 10,
-    "A+": 9,
-    "A": 8,
-    "B+": 7,
-    "B": 6,
-    "C+": 5,
-    "C": 4,
-    "D": 3,
-    "P": 2,
-    "F": 0,
-    "FE": 0,
-    "I": 0,
-    "WH": 0
+    "S": 10.0,
+    "A+": 9.0,
+    "A": 8.5,
+    "B+": 8.0,
+    "B": 7.5,
+    "C+": 7.0,
+    "C": 6.5,
+    "D": 6.0,
+    "P": 5.5,
+    "F": 0.0,
+    "FE": 0.0, # Failed due to eligibility
+    "I": 0.0,  # Incomplete
+    "Absent": 0.0,
+    "Withheld": 0.0
 }
 
 GRADE_STATUS = {
