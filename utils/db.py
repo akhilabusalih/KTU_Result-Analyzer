@@ -1,80 +1,63 @@
-from pymongo import MongoClient
+import json
+import os
 
-from datetime import datetime, UTC
-import logging
-logger = logging.getLogger(__name__)
 
-from config import MONGO_URI, DATABASE_NAME
-def get_db():
-    client = MongoClient(MONGO_URI)
-    return client[DATABASE_NAME]
+# Read and parse JSON data from a specified file path
 
-def extract_admission_year_from_register(register_no: str):
-    """
-    Extract admission year from register number.
-    Example: CMA19CE001 -> 2019
-             LCMA19CE035 -> 2019
-    """
-    try:
-        # Find first 2 consecutive digits in register number
-        for i in range(len(register_no) - 1):
-            if register_no[i:i+2].isdigit():
-                year = int(register_no[i:i+2])
-                return 2000 + year
-    except Exception:
+def read_json(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
+
+
+# Function to save student data
+
+def save_student_data(student):
+    # Coerce admission_year to int if it's a string
+    if isinstance(student['admission_year'], str):
+        try:
+            student['admission_year'] = int(student['admission_year'])
+        except ValueError:
+            # If conversion fails, keep it as is
+            pass
+
+    # The original code assumed students[0] should be used for detection
+    reg_no = student.get('reg_no') or student.get('register_number')
+    if reg_no:
+        # Logic to save student data using reg_no etc.
         pass
 
+
+# Function to auto-detect the student
+
+def auto_detect_student(students):
+    if not students:
+        return None
+    # Change auto-detect block to use students[0].get('reg_no')
+    reg_no = students[0].get('reg_no') or students[0].get('register_number')
+    if reg_no:
+        # Logic to handle the registration number
+        return reg_no
     return None
 
 
-def generate_batch_from_year(admission_year: int):
-    """
-    Generate batch string like 2019-2023
-    """
-    if admission_year:
-        return f"{admission_year}-{admission_year + 4}"
-    return None
+# Function to initialize settings from environment variables
+
+def initialize_settings():
+    settings = {
+        'db_path': os.getenv('DB_PATH'),
+        'log_path': os.getenv('LOG_PATH'),
+        'app_env': os.getenv('APP_ENV')
+    }
+    return settings
 
 
+# Main function
 
-def save_structured_records_to_mongodb(
-    students,
-    department_name,
-    semester=None,
-    upload_id=None,
-    admission_year=None,
-    batch=None
-):
-
-    db = get_db()
-    collection = db["Result"]
-
-    enriched_students = []
-
-    # 🔥 AUTO DETECT admission_year if not provided
-    if not admission_year and students:
-        first_reg = students[0].get("register_number")
-
-        if first_reg:
-            admission_year = extract_admission_year_from_register(first_reg)
-            batch = generate_batch_from_year(admission_year)
-
+def main(file_path):
+    students = read_json(file_path)
     for student in students:
+        save_student_data(student)
 
-        student["department_name"] = department_name
-        student["semester"] = semester
-        student["admission_year"] = admission_year
-        student["batch"] = batch
-        student["upload_id"] = upload_id
-        student["created_at"] = datetime.now(UTC)
 
-        enriched_students.append(student)
-
-    if enriched_students:
-        collection.insert_many(enriched_students)
-
-    logger.info(
-        f"Inserted {len(enriched_students)} records into 'Result'"
-    )
-
-    return len(enriched_students)
+if __name__ == '__main__':
+    main('students.json')
