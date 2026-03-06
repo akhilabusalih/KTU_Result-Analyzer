@@ -2,7 +2,7 @@ import logging
 from typing import Tuple, List, Dict
 
 from utils.parser import parse_department_result
-from utils.batch import extract_batch_from_reg_no
+
 from utils.sgpa import calculate_sgpa
 
 logger = logging.getLogger(__name__)
@@ -38,14 +38,6 @@ def process_result_file(
 
     # 2️⃣ Process each student
     for student in students:
-
-        reg_no = student["reg_no"]
-
-        # Batch extraction
-        admission_year, batch = extract_batch_from_reg_no(reg_no)
-
-        student["admission_year"] = admission_year
-        student["batch"] = batch
 
         # Attach department name from upload context
         student["department_name"] = department_name

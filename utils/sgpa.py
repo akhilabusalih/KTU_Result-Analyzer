@@ -1,9 +1,10 @@
 from typing import Tuple, Dict
 from config import GRADE_TO_POINT
+import math
 
 
 # --------------------------------------
-# DEPARTMENT MAPPING (IMPORTANT FIX)
+# DEPARTMENT MAPPING
 # --------------------------------------
 
 DEPARTMENT_MAP = {
@@ -19,7 +20,7 @@ DEPARTMENT_MAP = {
 
 
 # --------------------------------------
-# FETCH CREDIT (Scheme + Department Aware)
+# FETCH SUBJECT CREDIT
 # --------------------------------------
 
 def get_subject_credit(db, subject_code: str, scheme_year: int, department: str):
@@ -30,7 +31,7 @@ def get_subject_credit(db, subject_code: str, scheme_year: int, department: str)
     subject_code = subject_code.strip().upper()
     department = DEPARTMENT_MAP.get(department, department)
 
-    # 1️⃣ Try department-specific subject
+    # Department specific
     subject = db.Subject_Grade.find_one({
         "subject_code": subject_code,
         "scheme_year": scheme_year,
@@ -40,7 +41,7 @@ def get_subject_credit(db, subject_code: str, scheme_year: int, department: str)
     if subject:
         return subject.get("credit")
 
-    # 2️⃣ Fallback to ALL (common subjects)
+    # Common subjects fallback
     subject = db.Subject_Grade.find_one({
         "subject_code": subject_code,
         "scheme_year": scheme_year,
@@ -50,7 +51,7 @@ def get_subject_credit(db, subject_code: str, scheme_year: int, department: str)
     if subject:
         return subject.get("credit")
 
-    print(f"❌ Credit not found: {subject_code} | {scheme_year} | {department}")
+    print(f"❌ Credit not found → {subject_code} | {scheme_year} | {department}")
     return None
 
 
@@ -68,7 +69,10 @@ def calculate_sgpa(db, student: Dict) -> Tuple[float, int]:
     subjects = student.get("subjects", [])
 
     if not scheme_year or not department:
+        print("⚠ Missing scheme_year or department")
         return 0.0, 0
+
+    department = department.strip().upper()
 
     for subject in subjects:
 
@@ -79,7 +83,12 @@ def calculate_sgpa(db, student: Dict) -> Tuple[float, int]:
             continue
 
         grade = grade.strip().upper()
-        grade_point = GRADE_TO_POINT.get(grade, 0.0)
+
+        if grade not in GRADE_TO_POINT:
+            print(f"⚠ Unknown grade detected → {grade}")
+            continue
+
+        grade_point = GRADE_TO_POINT[grade]
 
         credit = get_subject_credit(
             db,
@@ -91,7 +100,7 @@ def calculate_sgpa(db, student: Dict) -> Tuple[float, int]:
         if credit is None:
             continue
 
-        # Skip zero-credit subjects (MCN, HUN, etc.)
+        # Skip audit subjects (0 credit)
         if credit > 0:
             total_points += grade_point * credit
             total_credits += credit
@@ -99,13 +108,18 @@ def calculate_sgpa(db, student: Dict) -> Tuple[float, int]:
     if total_credits == 0:
         return 0.0, 0
 
-    sgpa = round(total_points / total_credits, 2)
+    # --------------------------------------
+    # SGPA Calculation (truncate to 2 decimals)
+    # --------------------------------------
+
+    sgpa_raw = total_points / total_credits
+    sgpa = math.floor(sgpa_raw * 100) / 100
 
     return sgpa, total_credits
 
 
 # --------------------------------------
-# UPDATE ALL STUDENTS
+# UPDATE ALL STUDENTS SGPA
 # --------------------------------------
 
 def update_all_sgpa(db, student_collection_name: str):
@@ -126,4 +140,4 @@ def update_all_sgpa(db, student_collection_name: str):
             }
         )
 
-        print(f"✅ Updated {student.get('register_number')} → SGPA: {sgpa}")
+        print(f"✅ Updated {student.get('reg_no')} → SGPA: {sgpa}")

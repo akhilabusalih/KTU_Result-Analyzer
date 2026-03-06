@@ -5,7 +5,6 @@ from datetime import datetime, UTC
 
 from utils.db import save_structured_records_to_mongodb, get_db
 from core import process_result_file
-from utils.batch import extract_batch_from_reg_no
 from utils.parser import extract_text_from_pdf, detect_departments
 
 
@@ -144,8 +143,8 @@ if st.session_state.get("start_processing"):
 
     # ---------------- BATCH EXTRACTION ---------------- #
 
-    first_reg_no = processed_students[0]["reg_no"]
-    admission_year, batch = extract_batch_from_reg_no(first_reg_no)
+    admission_year = processed_students[0].get("admission_year")
+    batch = processed_students[0].get("batch")
 
     # ---------------- DUPLICATE CHECK ---------------- #
 

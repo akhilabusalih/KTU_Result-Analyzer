@@ -1,6 +1,11 @@
 import json
 import os
+from pymongo import MongoClient
+from datetime import datetime, UTC
+import logging
 
+from config import MONGO_URI, DATABASE_NAME
+from utils.batch import extract_batch_from_reg_no
 
 # Read and parse JSON data from a specified file path
 
@@ -11,22 +16,53 @@ def read_json(file_path):
 
 # Function to save student data
 
-def save_student_data(student):
-    # Coerce admission_year to int if it's a string
-    if isinstance(student['admission_year'], str):
-        try:
-            student['admission_year'] = int(student['admission_year'])
-        except ValueError:
-            # If conversion fails, keep it as is
-            pass
-
-    # The original code assumed students[0] should be used for detection
-    reg_no = student.get('reg_no') or student.get('register_number')
-    if reg_no:
-        # Logic to save student data using reg_no etc.
-        pass
+logger = logging.getLogger(__name__)
 
 
+def get_db():
+    client = MongoClient(MONGO_URI)
+    return client[DATABASE_NAME]
+
+
+def save_structured_records_to_mongodb(
+    students,
+    department_name,
+    semester=None,
+    upload_id=None,
+    admission_year=None,
+    batch=None
+):
+    db = get_db()
+    collection = db["Result"]
+
+    # ✅ Auto-detect admission_year/batch if not provided
+    if (admission_year is None or batch is None) and students:
+        first_reg = students[0].get("reg_no") or students[0].get("register_number")
+        if first_reg:
+            detected_year, detected_batch = extract_batch_from_reg_no(first_reg)
+            admission_year = admission_year if admission_year is not None else detected_year
+            batch = batch if batch is not None else detected_batch
+
+    enriched_students = []
+
+    for student in students:
+        student["department_name"] = department_name
+        student["semester"] = semester
+
+        # Use parser values if available, otherwise fallback
+        student["admission_year"] = student.get("admission_year") or admission_year
+        student["batch"] = student.get("batch") or batch
+
+        student["upload_id"] = upload_id
+        student["created_at"] = datetime.now(UTC)
+
+        enriched_students.append(student)
+
+    if enriched_students:
+        collection.insert_many(enriched_students)
+
+    logger.info(f"Inserted {len(enriched_students)} records into 'Result'")
+    return len(enriched_students)
 # Function to auto-detect the student
 
 def auto_detect_student(students):
@@ -51,13 +87,5 @@ def initialize_settings():
     return settings
 
 
-# Main function
-
-def main(file_path):
-    students = read_json(file_path)
-    for student in students:
-        save_student_data(student)
 
 
-if __name__ == '__main__':
-    main('students.json')
