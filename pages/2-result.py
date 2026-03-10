@@ -4,11 +4,21 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from utils.report_generator import generate_excel_report, generate_pdf_report
+import uuid
+from datetime import datetime
+from utils.report_auth import generate_qr_code, save_report_metadata
 
+
+def generate_report_id(department):
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    uid = str(uuid.uuid4())[:6]
+    return f"RPT-{department}-{timestamp}-{uid}"
 
 # --------------------------------------------------
 # PAGE CONFIG
 # --------------------------------------------------
+
 st.set_page_config(
     page_title="Result Analysis",
     page_icon="📊",
@@ -16,15 +26,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --------------------------------------------------
-# PAGE TITLE
-# --------------------------------------------------
-st.markdown("## 📊 Result Analysis")
+st.title("📊 Result Analysis")
+
 
 # --------------------------------------------------
 # SESSION VALIDATION
 # --------------------------------------------------
-
 
 if "last_upload_id" not in st.session_state:
     st.warning("No result data available.")
@@ -42,21 +49,18 @@ if not students:
     st.stop()
 
 
-df = pd.DataFrame(students)
-
 department = students[0]["department_name"]
 
-# ---------------------------------------
-# FETCH SGPA FROM DB AND ADD TO DF
-# ---------------------------------------
 
-students = list(db["Result"].find({"upload_id": upload_id}))
+# --------------------------------------------------
+# BUILD STUDENT DATAFRAME
+# --------------------------------------------------
+
 rows = []
 
 for student in students:
-    row = {
-        "Register No": student["reg_no"]
-    }
+
+    row = {"Register No": student["reg_no"]}
 
     for subject in student.get("subjects", []):
         row[subject["subject_code"]] = subject["grade"]
@@ -65,7 +69,6 @@ for student in students:
 
     rows.append(row)
 
-import pandas as pd
 df = pd.DataFrame(rows)
 
 # Move SGPA to last column
@@ -73,34 +76,97 @@ if "SGPA" in df.columns:
     cols = [c for c in df.columns if c != "SGPA"] + ["SGPA"]
     df = df[cols]
 
-# ---------------------------------------
-# UPDATE CSV FILE WITH SGPA COLUMN
-# ---------------------------------------
+# --------------------------------------------------
+# CALCULATE ARREARS (FAILED SUBJECT COUNT)
+# --------------------------------------------------
 
-output_file = department.replace(" ", "_") + ".csv"
+grade_columns = [
+    col for col in df.columns
+    if col not in ["Register No", "SGPA"]
+]
+
+def count_arrears(row):
+
+    arrears = 0
+
+    for col in grade_columns:
+
+        grade = row.get(col)
+
+        # Skip electives not taken
+        if pd.isna(grade) or grade is None:
+            continue
+
+        grade = str(grade).strip().upper()
+
+        if grade in ["F", "FE", "ABSENT"]:
+            arrears += 1
+
+    return arrears
+
+
+df["Arrear"] = df.apply(count_arrears, axis=1)
+
+# Move arrear column after SGPA
+arrear_col = df.pop("Arrear")
+df["Arrear"] = arrear_col
+
+
+# --------------------------------------------------
+# SAVE CSV OUTPUT
+# --------------------------------------------------
+
+os.makedirs("outputs", exist_ok=True)
+
+output_file = f"{department.replace(' ','_')}_results.csv"
 output_path = os.path.join("outputs", output_file)
 
 df.to_csv(output_path, index=False)
 
+
 # --------------------------------------------------
 # BASIC METRICS
 # --------------------------------------------------
+
+subjects = [
+    col for col in df.columns
+    if col not in ["Register No", "SGPA", "Arrear"]
+]
+
 total_students = len(df)
-total_subjects = len([col for col in df.columns if col not in ["Register No", "SGPA"]]) # excluding Register No
+total_subjects = len(subjects)
 
-subjects = [col for col in df.columns if col not in ["Register No", "SGPA"]]
+avg_sgpa = round(df["SGPA"].mean(), 2)
+max_sgpa = round(df["SGPA"].max(), 2)
+min_sgpa = round(df["SGPA"].min(), 2)
 
-#------------------PERFORMANCE ANALYSIS---------------------
-st.markdown("## 📘 Performance Analysis of All Students")
+st.markdown("## 📊 Result Overview")
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+col1.metric("Total Students", total_students)
+col2.metric("Subjects", total_subjects)
+col3.metric("Average SGPA", avg_sgpa)
+col4.metric("Highest SGPA", max_sgpa)
+col5.metric("Lowest SGPA", min_sgpa)
+
+
+# --------------------------------------------------
+# SUBJECT PERFORMANCE ANALYSIS
+# --------------------------------------------------
+
+st.markdown("## 📘 Subject Performance Analysis")
 
 analysis_rows = []
+
+fail_grades = ["F", "FE", "Absent"]
 
 for subject in subjects:
 
     total = len(df)
 
-    pass_count = df[df[subject] != "F"].shape[0]
-    fail_count = df[df[subject] == "F"].shape[0]
+    pass_count = df[~df[subject].isin(fail_grades)].shape[0]
+    fail_count = df[df[subject].isin(fail_grades)].shape[0]
 
     pass_percent = round((pass_count / total) * 100, 2)
 
@@ -126,182 +192,199 @@ for subject in subjects:
     analysis_rows.append(row)
 
 analysis_df = pd.DataFrame(analysis_rows)
+
 st.dataframe(analysis_df, use_container_width=True)
 
-# --------------------------------------------------
-# PASS vs FAIL CHART (COMPACT)
-# --------------------------------------------------
-
-st.markdown("### 📊 Pass vs Fail Comparison")
-
-subjects_chart = analysis_df["Subject"]
-pass_counts = analysis_df["Pass Count"]
-fail_counts = analysis_df["Fail Count"]
-
-fig = plt.figure(figsize=(10, 4))  # compact height
-
-x = np.arange(len(subjects_chart))
-width = 0.35
-
-plt.bar(x - width/2, pass_counts, width)
-plt.bar(x + width/2, fail_counts, width)
-
-plt.xticks(x, subjects_chart, rotation=45, fontsize=8)
-plt.yticks(fontsize=8)
-plt.xlabel("Subject", fontsize=9)
-plt.ylabel("Count", fontsize=9)
-plt.title("Pass vs Fail Count per Subject", fontsize=10)
-
-plt.legend(["Pass", "Fail"], fontsize=8, loc="upper right")
-
-plt.tight_layout()
-
-st.pyplot(fig)
 
 # --------------------------------------------------
-# GRADE DISTRIBUTION CHART (COMPACT)
+# CHART SECTION
 # --------------------------------------------------
 
-st.markdown("### 🎯 Grade Distribution")
-
-grade_columns = ["S", "A+", "A", "B+", "B", "C+", "C", "D", "P", "F"]
-
-subjects_chart = analysis_df["Subject"]
-
-fig2 = plt.figure(figsize=(10, 4))  # smaller height
-
-bottom_values = np.zeros(len(subjects_chart))
-
-for grade in grade_columns:
-    values = analysis_df[grade]
-    plt.bar(subjects_chart, values, bottom=bottom_values)
-    bottom_values += values
-
-plt.xticks(rotation=45, fontsize=8)
-plt.yticks(fontsize=8)
-plt.xlabel("Subject", fontsize=9)
-plt.ylabel("Count", fontsize=9)
-plt.title("Grade Distribution per Subject", fontsize=10)
-
-# Smaller legend, placed below
-plt.legend(
-    grade_columns,
-    loc="upper center",
-    bbox_to_anchor=(0.5, -0.25),
-    ncol=5,
-    fontsize=7
-)
-
-plt.tight_layout()
-
-st.pyplot(fig2)
-
-
-# --------------------------------------------------
-# DISPLAY HEADER
-# --------------------------------------------------
-st.markdown(f"### 📄 {department}")
+st.markdown("## 📈 Visual Analysis")
 
 col1, col2 = st.columns(2)
 
+
+# PASS VS FAIL CHART
 with col1:
-    st.metric("Total Students", total_students)
 
+    st.markdown("### Pass vs Fail")
+
+    subjects_chart = analysis_df["Subject"]
+    pass_counts = analysis_df["Pass Count"]
+    fail_counts = analysis_df["Fail Count"]
+
+    fig = plt.figure(figsize=(6,4))
+
+    x = np.arange(len(subjects_chart))
+    width = 0.35
+
+    plt.bar(x - width/2, pass_counts, width)
+    plt.bar(x + width/2, fail_counts, width)
+
+    plt.xticks(x, subjects_chart, rotation=45)
+    plt.title("Pass vs Fail Count")
+
+    plt.legend(["Pass","Fail"])
+
+    plt.tight_layout()
+
+    st.pyplot(fig)
+
+
+# GRADE DISTRIBUTION
 with col2:
-    st.metric("Total Subjects", total_subjects)
+
+    st.markdown("### Grade Distribution")
+
+    grade_columns = ["S","A+","A","B+","B","C+","C","D","P","F"]
+
+    subjects_chart = analysis_df["Subject"]
+
+    fig2 = plt.figure(figsize=(6,4))
+
+    bottom_values = np.zeros(len(subjects_chart))
+
+    for grade in grade_columns:
+
+        values = analysis_df[grade]
+
+        plt.bar(subjects_chart, values, bottom=bottom_values)
+
+        bottom_values += values
+
+    plt.xticks(rotation=45)
+
+    plt.title("Grade Distribution")
+
+    plt.legend(grade_columns, fontsize=7, ncol=5)
+
+    plt.tight_layout()
+
+    st.pyplot(fig2)
+
 
 # --------------------------------------------------
-# RESULT PREVIEW
-# --------------------------------------------------
-st.markdown("### 🔍 Student Result Preview")
-st.dataframe(df, use_container_width=True)
-
-# --------------------------------------------------
-# REGULAR STUDENTS FILTER
+# STUDENT RESULT PREVIEW
 # --------------------------------------------------
 
-regular_df = df
+st.markdown("## 🔍 Student Result Preview")
 
-st.markdown("## 📗 Performance Analysis of  Students ")
+st.dataframe(df, use_container_width=True, height=500)
 
-total_regular = len(regular_df)
 
-failed_students = regular_df[
-    (regular_df[subjects] == "F").any(axis=1)
-]
+# --------------------------------------------------
+# REGULAR STUDENT PERFORMANCE
+# --------------------------------------------------
+
+st.markdown("## 📗 Overall Student Performance")
+
+total_regular = len(df)
+
+failed_students = df[(df[subjects] == "F").any(axis=1)]
 
 total_failed = len(failed_students)
+
 total_passed = total_regular - total_failed
 
 pass_percent_regular = round((total_passed / total_regular) * 100, 2)
 
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Total Regular Students", total_regular)
-col2.metric("Total Failed (≥1 F)", total_failed)
-col3.metric("Pass % (Regular)", f"{pass_percent_regular}%")
+col1.metric("Total Students", total_regular)
+col2.metric("Students with Backlog", total_failed)
+col3.metric("Pass %", f"{pass_percent_regular}%")
+
 
 # --------------------------------------------------
 # TOPPERS
 # --------------------------------------------------
 
-
-db = get_db()
-collection = db["Result"]
+st.markdown("## 🏆 Top Performers")
 
 top_students = list(
-collection.find({"upload_id": upload_id})
+    db["Result"]
+    .find({"upload_id": upload_id})
     .sort("SGPA", -1)
     .limit(3)
 )
 
-st.markdown("## 🏆 Toppers ")
-
 for student in top_students:
-    st.write(f"{student['reg_no']} — SGPA: {student.get('SGPA', 0)}")
+
+    sgpa = round(student.get("SGPA",0),2)
+
+    st.write(f"**{student['reg_no']}** — SGPA: {sgpa}")
 
 
 # --------------------------------------------------
-# EXPORT OPTIONS
+# EXPORT REPORT
 # --------------------------------------------------
 
 st.markdown("## 📤 Export Report")
 
+header_info = {
+    "university": "APJ ABDUL KALAM TECHNOLOGICAL UNIVERSITY",
+    "exam_centre": department,
+    "exam_title": "Result Analysis Report"
+}
+
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("Export as Excel (.xlsx)"):
 
-        from report_generator import generate_excel_report
+    if st.button("Export Excel (.xlsx)"):
+        report_id = generate_report_id(department)
+
+        qr_path = generate_qr_code(report_id)
 
         file_path = generate_excel_report(
-            department,
             df,
             analysis_df,
-            total_students
+            f"outputs/{department}_Report.xlsx",
+            report_id,
+            qr_path
         )
 
-        with open(file_path, "rb") as f:
+        save_report_metadata(
+            db,
+            report_id,
+            department,
+            file_path,
+            "EXCEL"
+        )
+
+        with open(file_path,"rb") as f:
+
             st.download_button(
                 label="Download Excel",
                 data=f,
                 file_name=f"{department}_Report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
 
 with col2:
-    if st.button("Export as PDF (.pdf)"):
 
-        from report_generator import generate_pdf_report
-
+    if st.button("Export PDF (.pdf)"):
+        report_id = generate_report_id(department)
+        qr_path = generate_qr_code(report_id)
         file_path = generate_pdf_report(
-            department,
             df,
             analysis_df,
-            total_students
+            f"outputs/{department}_Report.pdf",
+            report_id,
+            qr_path
+        )
+        save_report_metadata(
+            db,
+            report_id,
+            department,
+            file_path,
+            "PDF"
         )
 
-        with open(file_path, "rb") as f:
+        with open(file_path,"rb") as f:
+
             st.download_button(
                 label="Download PDF",
                 data=f,
@@ -311,50 +394,10 @@ with col2:
 
 
 # --------------------------------------------------
-# HANDLE EXPORT ACTION
+# DATA WARNING
 # --------------------------------------------------
 
-from report_generator import generate_excel_report, generate_pdf_report
-
-if "export_type" in st.session_state:
-
-    if st.session_state["export_type"] == "excel":
-        file_path = generate_excel_report(
-            department,
-            df,
-            analysis_df,
-            total_students
-        )
-        st.success("Excel report generated!")
-        with open(file_path, "rb") as f:
-            st.download_button(
-                label="Download Excel",
-                data=f,
-                file_name=f"{department}_Report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-
-    elif st.session_state["export_type"] == "pdf":
-        file_path = generate_pdf_report(
-            department,
-            df,
-            analysis_df,
-            total_students
-        )
-        st.success("PDF report generated!")
-        with open(file_path, "rb") as f:
-            st.download_button(
-                label="Download PDF",
-                data=f,
-                file_name=f"{department}_Report.pdf",
-                mime="application/pdf"
-            )
-
-# --------------------------------------------------
-# DATA LOSS WARNING
-# --------------------------------------------------
 st.warning(
     "⚠️ This result data is temporary. "
-    "It will be cleared if you reload the page, close the browser, or start a new upload."
+    "It will be cleared if you reload the page or start a new upload."
 )

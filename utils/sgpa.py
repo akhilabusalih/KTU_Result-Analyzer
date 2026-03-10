@@ -8,16 +8,20 @@ import math
 # --------------------------------------
 
 DEPARTMENT_MAP = {
+
     "CIVIL ENGINEERING": "CE",
+
     "COMPUTER SCIENCE AND ENGINEERING": "CSE",
+    "COMPUTER SCIENCE & ENGINEERING": "CSE",   # ADD THIS
+
     "ELECTRICAL AND ELECTRONICS ENGINEERING": "EEE",
     "MECHANICAL ENGINEERING": "ME",
+
     "CE": "CE",
     "CSE": "CSE",
     "EEE": "EEE",
     "ME": "ME"
 }
-
 
 # --------------------------------------
 # FETCH SUBJECT CREDIT
@@ -31,7 +35,7 @@ def get_subject_credit(db, subject_code: str, scheme_year: int, department: str)
     subject_code = subject_code.strip().upper()
     department = DEPARTMENT_MAP.get(department, department)
 
-    # Department specific
+    # Department specific subject
     subject = db.Subject_Grade.find_one({
         "subject_code": subject_code,
         "scheme_year": scheme_year,
@@ -72,18 +76,30 @@ def calculate_sgpa(db, student: Dict) -> Tuple[float, int]:
         print("⚠ Missing scheme_year or department")
         return 0.0, 0
 
-    department = department.strip().upper()
+    department = department.strip().upper().replace("&", "AND")
 
     for subject in subjects:
 
         subject_code = subject.get("subject_code")
         grade = subject.get("grade")
 
-        if not subject_code or not grade:
+        # Skip if subject not registered (important for electives)
+        if not subject_code or grade is None:
             continue
 
-        grade = grade.strip().upper()
+        grade = str(grade).strip()
 
+        # Skip blank grades
+        if grade == "":
+            continue
+
+        grade = grade.upper()
+
+        # Skip placeholder parser values
+        if grade in ["-", "--", "NA"]:
+            continue
+
+        # Unknown grade protection
         if grade not in GRADE_TO_POINT:
             print(f"⚠ Unknown grade detected → {grade}")
             continue
@@ -109,11 +125,11 @@ def calculate_sgpa(db, student: Dict) -> Tuple[float, int]:
         return 0.0, 0
 
     # --------------------------------------
-    # SGPA Calculation (truncate to 2 decimals)
+    # SGPA Calculation (round to 2 decimals)
     # --------------------------------------
 
     sgpa_raw = total_points / total_credits
-    sgpa = math.floor(sgpa_raw * 100) / 100
+    sgpa = round(sgpa_raw, 2)
 
     return sgpa, total_credits
 
