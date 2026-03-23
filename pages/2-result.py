@@ -4,7 +4,11 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from utils.report_generator import generate_excel_report, generate_pdf_report
+from utils.report_generator import (
+    generate_excel_report,
+    generate_pdf_report,
+    generate_html_report,
+)
 import uuid
 from datetime import datetime
 from utils.report_auth import generate_qr_code, save_report_metadata
@@ -328,69 +332,66 @@ header_info = {
     "exam_title": "Result Analysis Report"
 }
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
+
+_sem   = students[0].get("semester", "")
+_batch = students[0].get("batch", "")
 
 with col1:
-
-    if st.button("Export Excel (.xlsx)"):
+    if st.button("📊 Export Excel"):
         report_id = generate_report_id(department)
-
-        qr_path = generate_qr_code(report_id)
-
+        qr_path   = generate_qr_code(report_id)
         file_path = generate_excel_report(
-            df,
-            analysis_df,
+            df, analysis_df,
             f"outputs/{department}_Report.xlsx",
-            report_id,
-            qr_path
+            report_id, qr_path,
+            department=department, semester=_sem, batch=_batch,
         )
-
-        save_report_metadata(
-            db,
-            report_id,
-            department,
-            file_path,
-            "EXCEL"
-        )
-
-        with open(file_path,"rb") as f:
-
+        save_report_metadata(db, report_id, department, file_path, "EXCEL")
+        with open(file_path, "rb") as f:
             st.download_button(
                 label="Download Excel",
                 data=f,
-                file_name=f"{department}_Report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name=f"{department.replace(' ','_')}_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
-
 with col2:
-
-    if st.button("Export PDF (.pdf)"):
+    if st.button("📄 Export PDF"):
         report_id = generate_report_id(department)
-        qr_path = generate_qr_code(report_id)
+        qr_path   = generate_qr_code(report_id)
         file_path = generate_pdf_report(
-            df,
-            analysis_df,
+            df, analysis_df,
             f"outputs/{department}_Report.pdf",
-            report_id,
-            qr_path
+            report_id, qr_path,
+            department=department, semester=_sem, batch=_batch,
         )
-        save_report_metadata(
-            db,
-            report_id,
-            department,
-            file_path,
-            "PDF"
-        )
-
-        with open(file_path,"rb") as f:
-
+        save_report_metadata(db, report_id, department, file_path, "PDF")
+        with open(file_path, "rb") as f:
             st.download_button(
                 label="Download PDF",
                 data=f,
-                file_name=f"{department}_Report.pdf",
-                mime="application/pdf"
+                file_name=f"{department.replace(' ','_')}_Report.pdf",
+                mime="application/pdf",
             )
+
+with col3:
+    if st.button("🌐 Export HTML"):
+        report_id    = generate_report_id(department)
+        qr_path      = generate_qr_code(report_id)
+        html_content = generate_html_report(
+            df=df, analysis_df=analysis_df,
+            report_id=report_id, department=department,
+            semester=_sem, batch=_batch, qr_path=qr_path,
+        )
+        save_report_metadata(db, report_id, department,
+                             f"outputs/{department}_Report.html", "HTML")
+        st.download_button(
+            label="Download HTML",
+            data=html_content.encode("utf-8"),
+            file_name=f"{department.replace(' ','_')}_Report.html",
+            mime="text/html",
+        )
 
 
 # --------------------------------------------------

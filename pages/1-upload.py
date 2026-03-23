@@ -207,6 +207,39 @@ if st.session_state.get("start_processing"):
 
     st.success("✅ Processing completed successfully")
 
+    # --------------------------------------------------
+    # PREPARE DATA FOR CHATBOT
+    # --------------------------------------------------
+
+    import pandas as pd
+
+    result_data = list(db["Result"].find(
+        {"upload_id": upload_id},
+        {"_id": 0}
+    ))
+
+    if result_data:
+        students_df = pd.DataFrame(result_data)
+
+        # Dynamically detect subject columns
+        subjects = [
+            col for col in students_df.columns
+            if col not in [
+                "Register No", "CGPA",
+                "upload_id", "department",
+                "semester", "admission_year", "batch"
+            ]
+        ]
+
+        st.session_state["DEPT"] = {
+            "name": st.session_state.department_name,
+            "students": students_df,
+            "subjects": subjects,
+            "loaded": True
+        }
+
+    # --------------------------------------------------
+
     st.session_state["last_upload_id"] = upload_id
 
     st.switch_page("pages/2-result.py")
