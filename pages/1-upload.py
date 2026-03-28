@@ -6,7 +6,9 @@ from datetime import datetime, UTC
 from utils.db import save_structured_records_to_mongodb, get_db
 from core import process_result_file
 from utils.parser import extract_text_from_pdf, detect_departments
+from utils.student_filter import filter_students_by_batch
 
+st.write("DEBUG MODE:", st.session_state.get("mode"))
 
 # --------------------------------------------------
 # DUPLICATE DATASET DIALOG
@@ -52,7 +54,16 @@ st.warning(
     "- Upload a new PDF\n"
     "- Close the browser window"
 )
+# --------------------------------------------------
+# MODE SELECTION
+# --------------------------------------------------
 
+mode = st.radio(
+    "Select Mode",
+    ["Public", "Private"],
+    horizontal=True
+)
+st.session_state.mode = mode
 
 # --------------------------------------------------
 # PATHS
@@ -130,7 +141,7 @@ if st.session_state.get("start_processing"):
 
     # ---------------- PARSE PDF ---------------- #
 
-    headers, processed_students, semester = process_result_file(
+    headers, processed_students, semester, detected_batch = process_result_file(
         st.session_state.pdf_path,
         st.session_state.department_name,
         db
@@ -162,10 +173,22 @@ if st.session_state.get("start_processing"):
     if "overwrite" in st.session_state:
 
         if st.session_state.overwrite:
-            old_upload_id = st.session_state.existing_data["upload_id"]
+            existing_data = st.session_state.get("existing_data")
 
-            db["Uploads_Metadata"].delete_one({"upload_id": old_upload_id})
-            db["Result"].delete_many({"upload_id": old_upload_id})
+            if existing_data:
+                old_upload_id = existing_data.get("upload_id")
+            else:
+                old_upload_id = None
+
+            # 🔥 SAFE DELETE ONLY IF VALID ID EXISTS
+            if old_upload_id:
+                db["Uploads_Metadata"].delete_one({"upload_id": old_upload_id})
+
+                if mode == "Public":
+                    db["Result_Public"].delete_many({"upload_id": old_upload_id})
+                else:
+                    db["Result_Private"].delete_many({"upload_id": old_upload_id})
+
         else:
             # Cancel processing
             st.session_state.start_processing = False
@@ -175,7 +198,6 @@ if st.session_state.get("start_processing"):
 
         del st.session_state.overwrite
         del st.session_state.existing_data
-
     # ---------------- SAVE DATA ---------------- #
 
     upload_id = f"{st.session_state.department_name}_S{semester}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -187,8 +209,7 @@ if st.session_state.get("start_processing"):
             st.session_state.department_name,
             semester=semester,
             upload_id=upload_id,
-            admission_year=admission_year,
-            batch=batch
+            mode= mode
         )
 
         db["Uploads_Metadata"].insert_one({
@@ -213,11 +234,16 @@ if st.session_state.get("start_processing"):
 
     import pandas as pd
 
-    result_data = list(db["Result"].find(
-        {"upload_id": upload_id},
-        {"_id": 0}
-    ))
-
+    if mode == "Public":
+        result_data = list(db["Result_Public"].find(
+            {"upload_id": upload_id},
+            {"_id": 0}
+        ))
+    else:
+        result_data = list(db["Result_Private"].find(
+            {"upload_id": upload_id},
+            {"_id": 0}
+        ))
     if result_data:
         students_df = pd.DataFrame(result_data)
 
@@ -241,5 +267,7 @@ if st.session_state.get("start_processing"):
     # --------------------------------------------------
 
     st.session_state["last_upload_id"] = upload_id
+    st.session_state["mode"] = mode
+    st.session_state["detected_batch"] = detected_batch
 
     st.switch_page("pages/2-result.py")

@@ -2,47 +2,93 @@ import logging
 from typing import Tuple, List, Dict
 
 from utils.parser import parse_department_result
-
 from utils.sgpa import calculate_sgpa
+from utils.batch_detector import detect_dominant_batch
+from utils.student_filter import filter_students_by_batch
+from utils.student_cleaner import clean_students_and_subjects
 
 logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------
-# MASTER RESULT PROCESSOR
+# MASTER PIPELINE (BEST PRACTICE)
+# ----------------------------------------
+
+def process_pipeline(file_path, department_name, db):
+    """
+    Full processing pipeline:
+    parse → detect batch → filter → clean
+    """
+
+    # 1️⃣ Parse
+    students = parse_department_result(file_path, department_name)
+
+    if not students:
+        raise ValueError("No students found in file")
+
+    # 2️⃣ Detect batch
+    detected_batch, _ = detect_dominant_batch(students)
+
+    # Attach batch to each student
+    for student in students:
+        student["batch"] = detected_batch
+
+    # 3️⃣ Filter students (remove outsiders)
+    students, skipped_students = filter_students_by_batch(
+        db,
+        students,
+        detected_batch
+    )
+
+    # 4️⃣ Clean subjects (remove HUT200 etc.)
+    students, valid_subjects = clean_students_and_subjects(students)
+
+    return students, detected_batch, skipped_students, valid_subjects
+
+
+# ----------------------------------------
+# MAIN RESULT PROCESSOR
 # ----------------------------------------
 
 def process_result_file(
     file_path: str,
     department_name: str,
-    db
-) -> Tuple[List[str], List[Dict], int]:
-    """
-    Orchestrates full result processing pipeline.
-
-    Returns:
-        headers (list of subject codes),
-        processed_students (list of enriched student dicts),
-        semester (int)
-    """
+    db,
+    mode="Public",
+) -> Tuple[List[str], List[Dict], int, str]:
 
     logger.info("Starting department result processing")
 
-    # 1️⃣ Parse department PDF
-    students = parse_department_result(file_path, department_name)
+    # 🔥 Use pipeline ONLY in Private mode
+    if mode == "Private":
+        students, detected_batch, skipped_students, valid_subjects = process_pipeline(
+            file_path,
+            department_name,
+            db
+        )
+    else:
+        # Public mode → no filtering
+        students = parse_department_result(file_path, department_name)
 
-    if not students:
-        raise ValueError("No students found in PDF")
+        if not students:
+            raise ValueError("No students found in file")
+
+        detected_batch, _ = detect_dominant_batch(students)
+
+        for student in students:
+            student["batch"] = detected_batch
+
+        skipped_students = []
+        valid_subjects = None
 
     processed_students = []
 
-    # 2️⃣ Process each student
+    print("DEBUG MODE IN CORE:", mode)
+
+    # 5️⃣ SGPA Calculation
     for student in students:
-
-        # Attach department name from upload context
         student["department_name"] = department_name
-
-        # 3️⃣ SGPA calculation
+        student["name"] = student.get("name", student.get("reg_no"))
         sgpa, total_credits = calculate_sgpa(db, student)
 
         student["SGPA"] = sgpa
@@ -50,20 +96,24 @@ def process_result_file(
 
         processed_students.append(student)
 
-    logger.info(
-        f"Processed {len(processed_students)} students successfully"
-    )
+    logger.info(f"Processed {len(processed_students)} students successfully")
 
-    # 4️⃣ Extract headers dynamically (union of subject codes)
-    headers = set()
+    # 6️⃣ Headers (Subjects)
 
-    for student in processed_students:
-        for subject in student["subjects"]:
-            headers.add(subject["subject_code"])
+    if mode == "Private" and valid_subjects:
+        headers = sorted(valid_subjects)
+    else:
+        headers_set = set()
+        for student in processed_students:
+            for subject in student["subjects"]:
+                headers_set.add(subject["subject_code"])
+        headers = sorted(list(headers_set))
 
-    headers = sorted(list(headers))
+    # 7️⃣ Semester Detection
 
-    # 5️⃣ Detect semester from first subject credit entry
+    if not processed_students:
+        raise ValueError("No valid students after filtering")
+
     semester = None
     first_student = processed_students[0]
 
@@ -77,4 +127,4 @@ def process_result_file(
             semester = subject_doc.get("semester")
             break
 
-    return headers, processed_students, semester
+    return headers, processed_students, semester, detected_batch

@@ -440,7 +440,7 @@ def generate_pdf_report(
     for rank, (_, row) in enumerate(top_df.iterrows(), 1):
         top_rows.append([
             Paragraph(str(rank), top_rank),
-            Paragraph(row["Register No"], td_l),
+            Paragraph(row.get("Register No", row.get("Student Name", "")), td_l),
             Paragraph(str(row["SGPA"]), td_b),
         ])
 
@@ -871,7 +871,7 @@ def generate_excel_report(
     for rank, (_, rd) in enumerate(top_df.iterrows(), 1):
         bg = "FFFBEB" if rank % 2 else "FFFFFF"
         cols = [(1, 1, str(rank), "center"),
-                (3, 7, rd["Register No"], "left"),
+                (3, 7, rd.get("Register No", rd.get("Student Name", "")), "left"),
                 (8, 10, str(rd["SGPA"]), "center")]
         for c1, c2, val, al in cols:
             ws.merge_cells(start_row=r, start_column=c1,
@@ -1213,7 +1213,7 @@ def generate_excel_report(
         m  = medals.get(rank, "0F172A")
         _span(r, 1, r, 2, val=rank, bold=True, size=9,
               color=m, bg=bg, align="center", border=True)
-        _span(r, 3, r, 7, val=rd["Register No"], size=9,
+        _span(r, 3, r, 7, val=rd.get("Register No", rd.get("Student Name", "")), size=9,
               color="0F172A", bg=bg, align="left", border=True)
         ws.cell(r, 3).alignment = Alignment(horizontal="left", vertical="center",
                                              indent=1)
@@ -1390,7 +1390,7 @@ def generate_html_report(
         top_rows += (f'<tr style="background:{bg};">'
                      f'<td style="text-align:center;font-weight:700;'
                      f'color:#D97706;padding:6px;">{rank}</td>'
-                     f'<td style="padding:6px;">{row["Register No"]}</td>'
+                     f'<td style="padding:6px;">{row.get("Register No", row.get("Student Name", ""))}</td>'
                      f'<td style="text-align:center;font-weight:700;'
                      f'padding:6px;">{row["SGPA"]}</td></tr>\n')
 

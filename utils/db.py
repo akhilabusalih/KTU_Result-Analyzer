@@ -5,78 +5,99 @@ from datetime import datetime, UTC
 import logging
 
 from config import MONGO_URI, DATABASE_NAME
-from utils.batch import extract_batch_from_reg_no
 
-# Read and parse JSON data from a specified file path
+logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------
+# READ JSON
+# --------------------------------------------------
 
 def read_json(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
 
 
-# Function to save student data
-
-logger = logging.getLogger(__name__)
-
+# --------------------------------------------------
+# DB CONNECTION
+# --------------------------------------------------
 
 def get_db():
     client = MongoClient(MONGO_URI)
     return client[DATABASE_NAME]
 
 
+# --------------------------------------------------
+# SAVE RESULT RECORDS
+# --------------------------------------------------
+
 def save_structured_records_to_mongodb(
     students,
     department_name,
     semester=None,
     upload_id=None,
-    admission_year=None,
-    batch=None
+    mode="Public"
 ):
-    db = get_db()
-    collection = db["Result"]
+    """
+    Stores processed student results into MongoDB.
 
-    # ✅ Auto-detect admission_year/batch if not provided
-    if (admission_year is None or batch is None) and students:
-        first_reg = students[0].get("reg_no") or students[0].get("register_number")
-        if first_reg:
-            detected_year, detected_batch = extract_batch_from_reg_no(first_reg)
-            admission_year = admission_year if admission_year is not None else detected_year
-            batch = batch if batch is not None else detected_batch
+    IMPORTANT:
+    - Batch must already be assigned in core.py
+    - This function DOES NOT calculate batch
+    """
+
+    db = get_db()
+
+    # 🔹 Select collection
+    if mode == "Public":
+        collection = db["Result_Public"]
+    else:
+        collection = db["Result_Private"]
 
     enriched_students = []
 
     for student in students:
+        # 🔹 Ensure reg_no consistency
+        reg_no = student.get("reg_no") or student.get("register_number")
+        student["reg_no"] = reg_no
+
+        # 🔹 Add metadata (DO NOT override existing logic)
         student["department_name"] = department_name
         student["semester"] = semester
-
-        # Use parser values if available, otherwise fallback
-        student["admission_year"] = student.get("admission_year") or admission_year
-        student["batch"] = student.get("batch") or batch
-
         student["upload_id"] = upload_id
         student["created_at"] = datetime.now(UTC)
+
+        # 🔥 IMPORTANT: batch must already exist
+        student["batch"] = student.get("batch")
 
         enriched_students.append(student)
 
     if enriched_students:
         collection.insert_many(enriched_students)
 
-    logger.info(f"Inserted {len(enriched_students)} records into 'Result'")
+    logger.info(f"Inserted {len(enriched_students)} records into {collection.name}")
     return len(enriched_students)
-# Function to auto-detect the student
+
+
+# --------------------------------------------------
+# OPTIONAL: AUTO DETECT STUDENT
+# --------------------------------------------------
 
 def auto_detect_student(students):
     if not students:
         return None
-    # Change auto-detect block to use students[0].get('reg_no')
+
     reg_no = students[0].get('reg_no') or students[0].get('register_number')
+
     if reg_no:
-        # Logic to handle the registration number
         return reg_no
+
     return None
 
-
-# Function to initialize settings from environment variables
+"""
+# --------------------------------------------------
+# SETTINGS
+# --------------------------------------------------
 
 def initialize_settings():
     settings = {
@@ -86,6 +107,4 @@ def initialize_settings():
     }
     return settings
 
-
-
-
+"""
