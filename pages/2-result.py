@@ -12,6 +12,9 @@ from utils.report_generator import (
 import uuid
 from datetime import datetime
 from utils.report_auth import generate_qr_code, save_report_metadata
+from utils.db import get_db
+
+db = get_db()
 
 
 def generate_report_id(department):
@@ -366,7 +369,7 @@ with col1:
             df, analysis_df,
             f"outputs/{department}_Report.xlsx",
             report_id, qr_path,
-            department=department, semester=_sem, batch=_batch,
+            department=department, semester=_sem, batch=_batch, mode=mode, db=db
         )
         save_report_metadata(db, report_id, department, file_path, "EXCEL")
         with open(file_path, "rb") as f:
@@ -380,7 +383,7 @@ with col2:
             df, analysis_df,
             f"outputs/{department}_Report.pdf",
             report_id, qr_path,
-            department=department, semester=_sem, batch=_batch,
+            department=department, semester=_sem, batch=_batch, mode=mode, db = db
         )
         save_report_metadata(db, report_id, department, file_path, "PDF")
         with open(file_path, "rb") as f:
@@ -393,7 +396,7 @@ with col3:
         html_content = generate_html_report(
             df=df, analysis_df=analysis_df,
             report_id=report_id, department=department,
-            semester=_sem, batch=_batch, qr_path=qr_path,
+            semester=_sem, batch=_batch, qr_path=qr_path,mode=mode, db = db
         )
         save_report_metadata(db, report_id, department,
                              f"outputs/{department}_Report.html", "HTML")

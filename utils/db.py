@@ -55,7 +55,10 @@ def save_structured_records_to_mongodb(
         collection = db["Result_Private"]
 
     enriched_students = []
-
+    #REMOVE THIS PART -----------------------------------------------------------------
+    for s in students[:3]:
+        print("💾 SAVING:", s.get("reg_no"), s.get("name"))
+    #------------------------------------------------------------------
     for student in students:
         # 🔹 Ensure reg_no consistency
         reg_no = student.get("reg_no") or student.get("register_number")

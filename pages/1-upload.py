@@ -141,11 +141,17 @@ if st.session_state.get("start_processing"):
 
     # ---------------- PARSE PDF ---------------- #
 
-    headers, processed_students, semester, detected_batch = process_result_file(
-        st.session_state.pdf_path,
-        st.session_state.department_name,
-        db
-    )
+    try:
+        headers, processed_students, semester, detected_batch = process_result_file(
+            st.session_state.pdf_path,
+            st.session_state.department_name,
+            db,
+            mode=mode
+        )
+    except ValueError as exc:
+        st.error(str(exc))
+        st.session_state.start_processing = False
+        st.stop()
 
     if not processed_students:
         st.error("No valid student data found.")

@@ -88,7 +88,8 @@ def process_result_file(
     # 5️⃣ SGPA Calculation
     for student in students:
         student["department_name"] = department_name
-        student["name"] = student.get("name", student.get("reg_no"))
+        if "name" not in student or not student["name"]:
+            print(f"⚠️ Name missing for {student.get('reg_no')}")
         sgpa, total_credits = calculate_sgpa(db, student)
 
         student["SGPA"] = sgpa
@@ -112,8 +113,10 @@ def process_result_file(
     # 7️⃣ Semester Detection
 
     if not processed_students:
-        raise ValueError("No valid students after filtering")
-
+        raise ValueError(
+            f"No valid students found for batch {detected_batch}. "
+            f"Check database or batch filtering."
+        )
     semester = None
     first_student = processed_students[0]
 

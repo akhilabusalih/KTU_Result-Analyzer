@@ -28,9 +28,9 @@ def clean_students_and_subjects(students):
         for student in students:
             for subject in student.get("subjects", []):
                 if subject["subject_code"] == subject_code:
-                    grade = subject.get("grade")
+                    grade = str(subject.get("grade", "")).strip().upper()
 
-                    if grade not in [None, "", "-", " "]:
+                    if grade not in [None, "", "-", " ", "F", "FE", "ABSENT"]:
                         has_value = True
                         break
 
@@ -39,6 +39,7 @@ def clean_students_and_subjects(students):
 
         if has_value:
             valid_subjects.append(subject_code)
+        print("VALID SUBJECTS AFTER CLEANING:", valid_subjects)
 
     # 🔹 Step 3: Clean each student's subject list
     cleaned_students = []

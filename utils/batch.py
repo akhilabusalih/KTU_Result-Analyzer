@@ -1,17 +1,55 @@
-def extract_batch_from_reg_no(reg_no: str):
+
+def get_batch(student: dict):
     """
-    Extract admission year and batch range.
-    Example:
-    2024CS001 → 2024, "2024-2028"
+    Returns batch in format: 2023-2027
+
+    Priority:
+    1. Use existing batch if present
+    2. Use admission_year
+    3. Extract from reg_no
     """
 
-    if not reg_no or len(reg_no) < 4:
-        return None, None
+    # 🔹 1. If batch already exists (BEST CASE)
+    batch = student.get("batch")
+    if batch and isinstance(batch, str) and "-" in batch:
+        return batch.strip()
 
-    try:
-        admission_year = int(reg_no[:4])
-        batch_end_year = admission_year + 4
-        return admission_year, f"{admission_year}-{batch_end_year}"
+    # 🔹 2. If admission_year exists
+    admission_year = student.get("admission_year")
+    if admission_year:
+        try:
+            admission_year = int(admission_year)
+            return f"{admission_year}-{admission_year + 4}"
+        except (ValueError, TypeError):
+            pass
 
-    except ValueError:
-        return None, None
+    # 🔹 3. Fallback → extract from reg_no
+    reg_no = student.get("reg_no") or student.get("register_number")
+
+    if reg_no and len(str(reg_no)) >= 4:
+        try:
+            year = int(str(reg_no)[:4])
+            return f"{year}-{year + 4}"
+        except ValueError:
+            pass
+
+    return "N/A"
+
+
+# 🔥 OPTIONAL (USED BY DETECTOR)
+
+def get_batch_year(student: dict):
+    """
+    Returns only starting year (e.g., 2023)
+    Used for histogram/dominant batch detection
+    """
+
+    batch = get_batch(student)
+
+    if batch and batch != "N/A":
+        try:
+            return int(batch.split("-")[0])
+        except:
+            pass
+
+    return None

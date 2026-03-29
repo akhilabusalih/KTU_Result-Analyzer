@@ -1,5 +1,20 @@
 # utils/student_filter.py
 
+def _normalize_batch_year(batch_value):
+    """
+    Normalize batch values like 2023, "2023", or "2023-2027"
+    to a comparable admission year string.
+    """
+    if batch_value is None:
+        return ""
+
+    batch_text = str(batch_value).strip()
+    if not batch_text:
+        return ""
+
+    return batch_text.split("-")[0]
+
+
 def filter_students_by_batch(db, students, selected_batch):
     """
     Filters students based on batch and enriches them with name from Student_data.
@@ -14,49 +29,45 @@ def filter_students_by_batch(db, students, selected_batch):
 
     valid_students = []
     skipped_students = []
+    selected_batch_year = _normalize_batch_year(selected_batch)
 
     for student in students:
-        # 🔹 Normalize register number
+        # 🔹 Get register number
         reg_no = student.get("reg_no") or student.get("register_number")
 
+        # ❌ Remove students without register number
         if not reg_no:
+            print("❌ Missing register number → removed")
             skipped_students.append("UNKNOWN")
             continue
 
         reg_no = str(reg_no).strip().upper()
         student["reg_no"] = reg_no
 
-        # 🔹 Fetch student from DB
+        # 🔹 Fetch from DB
         db_student = student_collection.find_one({"reg_no": reg_no})
 
+        # ❌ Remove if not in DB
         if not db_student:
-            print(f"❌ Not found in DB: {reg_no}")
+            print(f"❌ Not found in DB → removed: {reg_no}")
             skipped_students.append(reg_no)
             continue
 
-        # 🔹 Batch matching (ROBUST FIX)
+        # 🔹 Batch check
         db_batch = db_student.get("batch", "")
-        db_batch_year = db_batch.split("-")[0] if db_batch else ""
+        db_batch_year = _normalize_batch_year(db_batch)
 
-        if db_batch_year != selected_batch:
-            print(f"⚠️ Skipped (batch mismatch): {reg_no} | DB: {db_batch} | Expected: {selected_batch}")
+        # ❌ Remove if batch mismatch
+        if selected_batch_year and db_batch_year != selected_batch_year:
+            print(f"❌ Batch mismatch → removed: {reg_no} | DB: {db_batch} | Expected: {selected_batch}")
             skipped_students.append(reg_no)
             continue
 
-        # 🔹 Name mapping (SAFE)
-        name = db_student.get("name")
-
-        if not name or str(name).strip() == "":
-            print(f"⚠️ Missing name for {reg_no}")
-            name = "Unknown"
-
-        student["name"] = name
-
-        # 🔹 (Optional) attach extra info if needed
+        # ✅ VALID STUDENT
+        student["name"] = db_student.get("name", "Unknown")
         student["batch"] = db_batch
         student["branch"] = db_student.get("branch")
 
-        # ✅ Add to valid list
         valid_students.append(student)
 
     print(f"✅ Valid students: {len(valid_students)}")
