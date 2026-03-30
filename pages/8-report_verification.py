@@ -30,7 +30,8 @@ db = get_db()
 query_params = st.query_params
 
 report_id_from_qr = query_params.get("report_id")
-
+if isinstance(report_id_from_qr, list):
+    report_id_from_qr = report_id_from_qr[0]
 
 # --------------------------------------------------
 # MANUAL INPUT
@@ -47,7 +48,7 @@ report_id = report_id_from_qr if report_id_from_qr else manual_report_id
 # VERIFY BUTTON OR AUTO VERIFY
 # --------------------------------------------------
 
-if st.button("Verify Report") or report_id_from_qr:
+if st.button("Verify Report") or (report_id_from_qr is not None):
 
     if not report_id:
         st.warning("Please enter a Report ID")

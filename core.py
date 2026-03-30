@@ -7,6 +7,7 @@ from utils.batch_detector import detect_dominant_batch
 from utils.student_filter import filter_students_by_batch
 from utils.student_cleaner import clean_students_and_subjects
 
+
 logger = logging.getLogger(__name__)
 
 

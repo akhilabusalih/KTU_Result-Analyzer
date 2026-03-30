@@ -1,9 +1,0 @@
-streamlit
-pymongo
-pandas
-openpyxl
-reportlab
-matplotlib
-pdfplumber
-PyPDF2
-python-dotenv
