@@ -112,5 +112,4 @@ pnpm-lock.yaml
 
 Api.env
 autho.py
-deps.py
 auth_utils.py
