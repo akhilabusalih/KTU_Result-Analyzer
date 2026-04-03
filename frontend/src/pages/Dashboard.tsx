@@ -1,4 +1,6 @@
-import React from 'react';
+// src/pages/Dashboard.tsx
+
+import React, { useEffect, useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { ModernNavbar } from '../components/ModernNavbar';
 import { WelcomeCard } from '../components/WelcomeCard';
@@ -10,10 +12,23 @@ import { ChatBot } from '../components/ChatBot';
 import { MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTheme } from '../context/ThemeContext';
+// >>>>>> ADD THIS LINE <<<<<<
+import { apiFetch } from '../utils/api';
 
 export function Dashboard() {
   const [isChatOpen, setIsChatOpen] = React.useState(false);
   const { isDarkMode, toggleDarkMode } = useTheme();
+
+  // >>>>>> AUTH INTEGRATION STATE <<<<<<
+  const [userInfo, setUserInfo] = useState<any>(null);
+  const [authError, setAuthError] = useState<string>("");
+
+  // >>>>>> CALL PROTECTED ROUTE ON LOAD <<<<<<
+  useEffect(() => {
+    apiFetch<{ user: any }>('/protected')
+      .then(data => setUserInfo(data.user))
+      .catch(err => setAuthError(err.message));
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors">
@@ -23,6 +38,19 @@ export function Dashboard() {
         <ModernNavbar isDarkMode={isDarkMode} onToggleDarkMode={toggleDarkMode} />
         
         <main className="p-6 max-w-[1600px] mx-auto">
+          {/* >>>>>> AUTH STATUS CARD <<<<<< */}
+          <div className="mb-6">
+            {userInfo && (
+              <div className="rounded-xl bg-green-100 text-green-900 px-4 py-2 mb-2 shadow">
+                <strong>Logged in as:</strong> {userInfo.email}
+              </div>
+            )}
+            {authError && (
+              <div className="rounded-xl bg-red-100 text-red-900 px-4 py-2 mb-2 shadow">
+                <strong>Auth Error:</strong> {authError}
+              </div>
+            )}
+          </div>
           {/* Welcome Card */}
           <WelcomeCard isDarkMode={isDarkMode} />
 
