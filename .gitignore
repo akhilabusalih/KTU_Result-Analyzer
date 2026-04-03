@@ -111,6 +111,6 @@ pnpm-lock.yaml
 #-----------SECURITY-----------------
 
 Api.env
-auth.py
+autho.py
 deps.py
 auth_utils.py
