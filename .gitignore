@@ -107,3 +107,10 @@ coverage/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+#-----------SECURITY-----------------
+
+Api.env
+auth.py
+deps.py
+auth_utils.py
