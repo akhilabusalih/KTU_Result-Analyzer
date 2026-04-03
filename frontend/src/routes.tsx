@@ -14,6 +14,10 @@ import { HelpAndSupport } from "./pages/HelpAndSupport";
 import { Profile } from "./pages/Profile";
 import { Settings } from "./pages/Settings";
 import { ResultAnalyzer } from "./pages/ResultAnalyzer";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+
+// ...other imports...
+
 
 /**
  * Root layout — lives *inside* React Router's rendering tree so that
@@ -40,15 +44,22 @@ export const router = createBrowserRouter([
       { path: "/", Component: Landing },
       { path: "/analyze", Component: ResultAnalyzer },
       { path: "/auth", Component: Auth },
-      { path: "/dashboard", Component: Dashboard },
-      { path: "/dashboard/results", Component: Results },
-      { path: "/dashboard/analytics", Component: Analytics },
-      { path: "/dashboard/students", Component: Students },
-      { path: "/dashboard/subjects", Component: SubjectConfiguration },
-      { path: "/dashboard/report-issue", Component: ReportIssue },
-      { path: "/dashboard/help-support", Component: HelpAndSupport },
-      { path: "/dashboard/profile", Component: Profile },
-      { path: "/dashboard/settings", Component: Settings },
+
+      // ↓↓↓↓ Protect these routes ↓↓↓↓
+      {
+        element: <ProtectedRoute />,
+        children: [
+          { path: "/dashboard", Component: Dashboard },
+          { path: "/dashboard/results", Component: Results },
+          { path: "/dashboard/analytics", Component: Analytics },
+          { path: "/dashboard/students", Component: Students },
+          { path: "/dashboard/subjects", Component: SubjectConfiguration },
+          { path: "/dashboard/report-issue", Component: ReportIssue },
+          { path: "/dashboard/help-support", Component: HelpAndSupport },
+          { path: "/dashboard/profile", Component: Profile },
+          { path: "/dashboard/settings", Component: Settings },
+        ],
+      },
     ],
   },
 ]);

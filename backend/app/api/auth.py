@@ -23,8 +23,15 @@ def google_login():
     return RedirectResponse(url)
 
 
-# 🟢 Callback (THIS MUST EXIST ✅)
 @router.get("/google/callback")
 async def google_callback(request: Request):
     code = request.query_params.get("code")
-    return await handle_google_callback(code)
+    result = await handle_google_callback(code)
+    token = result.get("token")
+    if token:
+        # Replace with actual frontend URL if deployed!
+        frontend_url = f"http://localhost:3000/auth?token={token}"
+        return RedirectResponse(frontend_url)
+    else:
+        # If error, optionally display/log error or redirect to error page
+        return result
