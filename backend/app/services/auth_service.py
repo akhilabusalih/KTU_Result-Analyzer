@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from app.dependencies.deps import get_database
+from app.dependencies.database import get_database
 from app.core.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI
 from app.core.security import create_token
 
