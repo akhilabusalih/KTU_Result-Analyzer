@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { Brain, Mail, Lock, Eye, EyeOff, User, ArrowRight, Sparkles } from 'lucide-react';
@@ -6,6 +6,9 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
+
+// Change to your API base when deploying
+const BACKEND_BASE = "http://localhost:8000/auth"; 
 
 export function Auth() {
   const navigate = useNavigate();
@@ -18,16 +21,37 @@ export function Auth() {
     confirmPassword: ''
   });
 
+  // Check for Google JWT token in URL after redirection from backend
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      localStorage.setItem('jwt_token', token);
+      // Remove `?token=...` from URL for cleanliness
+      window.history.replaceState({}, document.title, "/dashboard");
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Navigate to dashboard after authentication
+    // ... implement normal login/signup here ...
     navigate('/dashboard');
   };
 
+  // REAL: Redirect to FastAPI backend
+  const handleSignInWithGoogle = () => {
+    window.location.href = `${BACKEND_BASE}/google/login`;
+  };
+
   const handleSocialAuth = (provider: string) => {
-    console.log(`Authenticating with ${provider}`);
-    // In a real app, this would trigger OAuth flow
-    navigate('/dashboard');
+    if (provider === 'Google') {
+      handleSignInWithGoogle();
+    } else {
+      // Fallback or implement other providers here
+      console.log(`Authenticating with ${provider}`);
+      // navigate('/dashboard');
+    }
   };
 
   return (
