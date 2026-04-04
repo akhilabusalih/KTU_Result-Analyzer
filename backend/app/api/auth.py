@@ -30,7 +30,7 @@ async def google_callback(request: Request):
     token = result.get("token")
     if token:
         # Replace with actual frontend URL if deployed!
-        frontend_url = f"http://localhost:3000/auth?token={token}"
+        frontend_url = f"http://localhost:8000/auth?token={token}"
         return RedirectResponse(frontend_url)
     else:
         # If error, optionally display/log error or redirect to error page

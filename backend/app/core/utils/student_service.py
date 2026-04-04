@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 import pandas as pd
-
+import io
 # --------------------------------------------------
 # CONSTANTS
 # --------------------------------------------------
@@ -128,10 +128,41 @@ def get_dashboard_counts(db):
     total_students = db[COLLECTION_NAME].count_documents({})
     batches = get_batches_with_departments(db)
     total_batches = len(batches)
+    total_departments = len(set(batch["department"] for batch in batches))
+    total_scheme_years = len(db[COLLECTION_NAME].distinct("scheme_year"))
     return {
         "total_students": total_students,
-        "total_batches": total_batches
+        "total_batches": total_batches,
+        "total_departments": total_departments,
+        "total_scheme_years": total_scheme_years
     }
+
+# --------------------------------------------------
+# GET BATCH OVERVIEW
+# --------------------------------------------------
+
+def get_batch_overview(db):
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$batch",
+                "departments": {"$addToSet": "$branch"},
+                "scheme_year": {"$first": "$scheme_year"},
+                "students": {"$sum": 1}
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "batch": "$_id",
+                "department": "$departments",
+                "scheme_year": 1,
+                "students": 1
+            }
+        }
+    ]
+
+    return list(db[COLLECTION_NAME].aggregate(pipeline))
 
 # --------------------------------------------------
 # DELETE STUDENT
@@ -146,3 +177,18 @@ def delete_student(db, reg_no: str):
 def get_student(db, reg_no: str):
     doc = db[COLLECTION_NAME].find_one({"reg_no": reg_no}, {"_id": 0})
     return _db_to_frontend(doc)
+
+# --------------------------------------------------
+# EXPORT TO CSV
+# --------------------------------------------------
+def export_students_csv(db):
+    students = get_all_students(db)
+
+    df = pd.DataFrame(students)
+
+    stream = io.StringIO()
+    df.to_csv(stream, index=False)
+
+    stream.seek(0)
+
+    return stream

@@ -1,5 +1,5 @@
 from typing import Tuple, Dict
-from config import GRADE_TO_POINT
+from app.core.config import GRADE_TO_POINT
 import math
 
 
