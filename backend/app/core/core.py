@@ -1,11 +1,11 @@
 import logging
 from typing import Tuple, List, Dict
 
-from utils.parser import parse_department_result
-from utils.sgpa import calculate_sgpa
-from utils.batch_detector import detect_dominant_batch
-from utils.student_filter import filter_students_by_batch
-from utils.student_cleaner import clean_students_and_subjects
+from app.core.utils.parser import parse_department_result
+from app.core.utils.sgpa import calculate_sgpa
+from app.core.utils.batch_detector import detect_dominant_batch
+from app.core.utils.student_filter import filter_students_by_batch
+from app.core.utils.student_cleaner import clean_students_and_subjects
 
 
 logger = logging.getLogger(__name__)

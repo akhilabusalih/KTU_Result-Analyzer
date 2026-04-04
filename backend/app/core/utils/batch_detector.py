@@ -1,5 +1,5 @@
 from collections import Counter
-from utils.batch import get_batch
+from app.core.utils.batch import get_batch
 
 
 def detect_dominant_batch(students):
